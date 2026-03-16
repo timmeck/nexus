@@ -160,6 +160,81 @@ AGENTS: list[dict[str, Any]] = [
         ],
         "tags": ["security", "threats", "monitoring", "safety"],
     },
+    {
+        "name": "costcontrol",
+        "description": (
+            "AI Cost Controller that tracks, budgets, and optimizes LLM API spending. "
+            "Monitors token usage per app, enforces budget limits, and provides cost analytics."
+        ),
+        "endpoint": "http://localhost:8600",
+        "capabilities": [
+            {
+                "name": "cost_tracking",
+                "description": "Tracks LLM API costs per app, model, and query in real-time.",
+                "price_per_request": 0.001,
+                "avg_response_ms": 50,
+                "languages": ["en", "de"],
+            },
+            {
+                "name": "budget_management",
+                "description": "Manages budgets with alerts and auto-model-downgrade when limits are reached.",
+                "price_per_request": 0.001,
+                "avg_response_ms": 50,
+                "languages": ["en", "de"],
+            },
+        ],
+        "tags": ["cost", "budget", "analytics", "llm", "optimization"],
+    },
+    {
+        "name": "safetyproxy",
+        "description": (
+            "AI Safety Proxy that sits in front of any LLM API. Blocks prompt injection, "
+            "detects PII, filters content, and logs all interactions for compliance."
+        ),
+        "endpoint": "http://localhost:8700",
+        "capabilities": [
+            {
+                "name": "prompt_injection_detection",
+                "description": "Detects and blocks prompt injection attacks in LLM inputs.",
+                "price_per_request": 0.005,
+                "avg_response_ms": 100,
+                "languages": ["en", "de"],
+            },
+            {
+                "name": "pii_detection",
+                "description": "Detects and redacts personally identifiable information in text.",
+                "price_per_request": 0.005,
+                "avg_response_ms": 80,
+                "languages": ["en", "de"],
+            },
+        ],
+        "tags": ["safety", "compliance", "pii", "guardrails", "proxy"],
+    },
+    {
+        "name": "loganalyst",
+        "description": (
+            "AI Log Analyst that ingests application logs, detects anomalies, "
+            "explains errors with AI, and suggests fixes. Supports nginx, syslog, and custom formats."
+        ),
+        "endpoint": "http://localhost:8800",
+        "capabilities": [
+            {
+                "name": "log_analysis",
+                "description": "Analyzes log files for patterns, anomalies, and error clusters.",
+                "price_per_request": 0.01,
+                "avg_response_ms": 2000,
+                "languages": ["en", "de"],
+            },
+            {
+                "name": "error_explanation",
+                "description": "AI-powered explanation of errors with root cause analysis and fix suggestions.",
+                "price_per_request": 0.02,
+                "avg_response_ms": 3000,
+                "languages": ["en", "de"],
+            },
+        ],
+        "tags": ["logs", "monitoring", "anomaly", "devops", "debugging"],
+    },
 ]
 
 # ---------------------------------------------------------------------------
