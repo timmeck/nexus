@@ -79,7 +79,7 @@ python run.py
 
 Nexus is now running at `http://localhost:9500`. Open the dashboard or hit `/docs` for the interactive API.
 
-![Nexus Dashboard](dashboard.png)
+![Nexus Dashboard](docs/dashboard.png)
 
 ### Register Your First Agent
 
