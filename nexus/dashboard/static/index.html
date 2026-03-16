@@ -240,6 +240,57 @@
             border: 1px solid rgba(212, 168, 67, 0.2);
         }
 
+        .auth-badge {
+            font-size: 9px;
+            padding: 1px 6px;
+            border-radius: 3px;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+        }
+
+        .auth-badge.enabled {
+            background: rgba(74, 222, 128, 0.15);
+            color: var(--green);
+            border: 1px solid rgba(74, 222, 128, 0.3);
+        }
+
+        .auth-badge.disabled {
+            background: rgba(248, 113, 113, 0.1);
+            color: var(--text-dim);
+            border: 1px solid var(--border);
+        }
+
+        .verification-card {
+            background: var(--surface-2);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 14px;
+            margin-bottom: 10px;
+        }
+
+        .verification-card.consensus {
+            border-color: rgba(74, 222, 128, 0.3);
+        }
+
+        .verification-card.no-consensus {
+            border-color: rgba(248, 113, 113, 0.3);
+        }
+
+        .consensus-bar {
+            width: 100%;
+            height: 8px;
+            background: var(--border);
+            border-radius: 4px;
+            overflow: hidden;
+            margin: 8px 0;
+        }
+
+        .consensus-fill {
+            height: 100%;
+            border-radius: 4px;
+            transition: width 0.3s;
+        }
+
         /* ── Activity Feed ──────────────────────────── */
         .feed {
             max-height: 400px;
@@ -439,6 +490,14 @@
                 <div class="header-stat-value" id="stat-success">0%</div>
                 <div class="header-stat-label">Success Rate</div>
             </div>
+            <div class="header-stat">
+                <div class="header-stat-value" id="stat-auth">0</div>
+                <div class="header-stat-label">Auth Enabled</div>
+            </div>
+            <div class="header-stat">
+                <div class="header-stat-value" id="stat-verifications">0</div>
+                <div class="header-stat-label">Verifications</div>
+            </div>
         </div>
     </header>
 
@@ -501,6 +560,33 @@
             </div>
         </div>
 
+        <!-- Multi-Agent Verification -->
+        <div class="card">
+            <div class="card-header">
+                <span class="card-title">Multi-Agent Verification</span>
+            </div>
+            <div class="card-body">
+                <div class="form-group">
+                    <label class="form-label">Capability</label>
+                    <input class="form-input" id="verify-capability" placeholder="e.g. text_analysis" />
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Query</label>
+                    <textarea class="form-textarea" id="verify-query" placeholder="Query to verify across multiple agents"></textarea>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Min Agents</label>
+                    <input class="form-input" id="verify-min" type="number" value="3" min="2" max="10" />
+                </div>
+                <button class="btn" id="btn-verify" onclick="sendVerification()">Verify</button>
+
+                <div id="verify-result" style="margin-top:16px;display:none">
+                    <div class="form-label">Verification Result</div>
+                    <div id="verify-body"></div>
+                </div>
+            </div>
+        </div>
+
         <!-- Activity Feed -->
         <div class="card">
             <div class="card-header">
@@ -536,6 +622,8 @@
                     data.interactions_total > 0
                         ? `${(data.success_rate * 100).toFixed(1)}%`
                         : '—';
+                document.getElementById('stat-auth').textContent = data.agents_auth_enabled || 0;
+                document.getElementById('stat-verifications').textContent = data.verifications_total || 0;
             } catch (e) {
                 console.error('Stats fetch failed:', e);
             }
@@ -565,11 +653,16 @@
                         `<span class="cap-tag">${c.name}</span>`
                     ).join(' ');
 
+                    const authBadge = a.auth_enabled
+                        ? '<span class="auth-badge enabled">HMAC</span>'
+                        : '<span class="auth-badge disabled">NO AUTH</span>';
+
                     return `
                         <div class="agent-card">
                             <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
                                 <span class="status-dot ${a.status}"></span>
                                 <span class="agent-name">${escHtml(a.name)}</span>
+                                ${authBadge}
                             </div>
                             <div class="agent-endpoint">${escHtml(a.endpoint)}</div>
                             <div class="agent-meta">
@@ -638,6 +731,84 @@
 
             btn.disabled = false;
             btn.textContent = 'SEND REQUEST';
+        }
+
+        // ── Verification ─────────────────────────────────
+        async function sendVerification() {
+            const btn = document.getElementById('btn-verify');
+            btn.disabled = true;
+            btn.textContent = 'VERIFYING...';
+
+            const payload = {
+                capability: document.getElementById('verify-capability').value,
+                query: document.getElementById('verify-query').value,
+                min_agents: parseInt(document.getElementById('verify-min').value) || 3,
+            };
+
+            try {
+                const res = await fetch(`${API}/api/protocol/verify`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload),
+                });
+                const data = await res.json();
+
+                const resultDiv = document.getElementById('verify-result');
+                resultDiv.style.display = 'block';
+
+                const consensusColor = data.consensus_score > 0.7 ? 'var(--green)'
+                    : data.consensus_score > 0.4 ? 'var(--gold)' : 'var(--red)';
+                const consensusPct = (data.consensus_score * 100).toFixed(0);
+
+                let answersHtml = (data.answers || []).map(a => `
+                    <div style="padding:6px 0;border-bottom:1px solid var(--border);font-size:11px">
+                        <span style="color:${a.status === 'completed' ? 'var(--green)' : 'var(--red)'}">${escHtml(a.agent_name)}</span>
+                        <span style="color:var(--text-dim)">conf: ${(a.confidence * 100).toFixed(0)}%</span>
+                        <div style="color:var(--text);margin-top:2px">${escHtml(a.answer || a.error || '—')}</div>
+                    </div>
+                `).join('');
+
+                let contradictionsHtml = '';
+                if (data.contradictions && data.contradictions.length > 0) {
+                    contradictionsHtml = `
+                        <div style="margin-top:10px;font-size:11px;color:var(--red)">
+                            <strong>Contradictions:</strong>
+                            ${data.contradictions.map(c => `<div>• ${escHtml(c)}</div>`).join('')}
+                        </div>`;
+                }
+
+                document.getElementById('verify-body').innerHTML = `
+                    <div class="verification-card ${data.consensus ? 'consensus' : 'no-consensus'}">
+                        <div style="display:flex;justify-content:space-between;align-items:center">
+                            <span style="font-size:12px;font-weight:600;color:${data.consensus ? 'var(--green)' : 'var(--red)'}">
+                                ${data.consensus ? 'CONSENSUS REACHED' : 'NO CONSENSUS'}
+                            </span>
+                            <span style="font-size:11px;color:var(--text-dim)">
+                                ${data.agents_responded}/${data.agents_queried} agents responded
+                            </span>
+                        </div>
+                        <div class="consensus-bar">
+                            <div class="consensus-fill" style="width:${consensusPct}%;background:${consensusColor}"></div>
+                        </div>
+                        <div style="font-size:10px;color:var(--text-dim)">Consensus: ${consensusPct}%</div>
+                        <div class="response-box" style="margin-top:10px">${escHtml(data.best_answer)}</div>
+                        ${answersHtml}
+                        ${contradictionsHtml}
+                    </div>`;
+
+                addFeedItem(
+                    data.consensus ? 'success' : 'fail',
+                    `Verification: ${data.consensus ? 'consensus' : 'no consensus'} (${consensusPct}%) for "${payload.query.substring(0, 30)}..."`,
+                );
+                refreshStats();
+            } catch (e) {
+                document.getElementById('verify-result').style.display = 'block';
+                document.getElementById('verify-body').innerHTML =
+                    `<div class="response-box" style="color:var(--red)">Error: ${escHtml(e.message)}</div>`;
+            }
+
+            btn.disabled = false;
+            btn.textContent = 'VERIFY';
         }
 
         // ── Feed ───────────────────────────────────────

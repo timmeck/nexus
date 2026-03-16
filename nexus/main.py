@@ -111,6 +111,15 @@ async def stats():
 
     ws_agents = websocket.get_connected_agents()
 
+    auth_enabled = await db.execute("SELECT COUNT(*) as c FROM agents WHERE auth_enabled = 1")
+    auth_count = (await auth_enabled.fetchone())["c"]
+
+    verifications = await db.execute("SELECT COUNT(*) as c FROM verifications")
+    verifications_count = (await verifications.fetchone())["c"]
+
+    consensus = await db.execute("SELECT COUNT(*) as c FROM verifications WHERE consensus = 1")
+    consensus_count = (await consensus.fetchone())["c"]
+
     from nexus.federation.service import get_federation_stats
     fed_stats = await get_federation_stats()
 
@@ -118,9 +127,12 @@ async def stats():
         "agents_total": agents_count,
         "agents_online": online_count,
         "agents_ws_connected": len(ws_agents),
+        "agents_auth_enabled": auth_count,
         "interactions_total": interactions_count,
         "interactions_successful": success_count,
         "success_rate": round(success_count / interactions_count, 4) if interactions_count > 0 else 0,
+        "verifications_total": verifications_count,
+        "verifications_consensus": consensus_count,
         "federation": fed_stats,
         "version": __version__,
     }

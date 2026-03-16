@@ -9,6 +9,7 @@ import logging
 import uuid
 from datetime import datetime
 
+from nexus.auth import generate_api_key
 from nexus.database import get_db, to_json, from_json
 from nexus.models.agent import Agent, AgentCreate, AgentStatus, AgentUpdate, Capability
 
@@ -30,16 +31,18 @@ async def register_agent(payload: AgentCreate) -> Agent:
     caps_json = to_json([c.model_dump() for c in payload.capabilities])
     tags_json = to_json(payload.tags)
     meta_json = to_json(payload.meta)
+    api_key = generate_api_key()
 
     await db.execute(
         """INSERT INTO agents (id, name, description, endpoint, capabilities, tags, meta,
-                               trust_score, status, registered_at, last_heartbeat)
-           VALUES (?, ?, ?, ?, ?, ?, ?, 0.5, 'online', ?, ?)""",
+                               trust_score, status, registered_at, last_heartbeat,
+                               api_key, auth_enabled)
+           VALUES (?, ?, ?, ?, ?, ?, ?, 0.5, 'online', ?, ?, ?, 1)""",
         (agent_id, payload.name, payload.description, payload.endpoint,
-         caps_json, tags_json, meta_json, now, now),
+         caps_json, tags_json, meta_json, now, now, api_key),
     )
     await db.commit()
-    log.info("Registered agent %s (%s) at %s", payload.name, agent_id, payload.endpoint)
+    log.info("Registered agent %s (%s) at %s [auth=enabled]", payload.name, agent_id, payload.endpoint)
     return await get_agent(agent_id)
 
 
@@ -200,4 +203,6 @@ def _row_to_agent(row) -> Agent:
         last_heartbeat=datetime.fromisoformat(row["last_heartbeat"]) if row["last_heartbeat"] else None,
         total_interactions=row["total_interactions"],
         successful_interactions=row["successful_interactions"],
+        api_key=row["api_key"] if "api_key" in row.keys() else None,
+        auth_enabled=bool(row["auth_enabled"]) if "auth_enabled" in row.keys() else False,
     )

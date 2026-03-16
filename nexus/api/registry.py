@@ -10,32 +10,40 @@ from nexus.registry import service
 router = APIRouter(prefix="/api/registry", tags=["registry"])
 
 
-@router.post("/agents", response_model=Agent, status_code=201)
+@router.post("/agents", status_code=201)
 async def register_agent(payload: AgentCreate):
-    """Register a new agent in the Nexus network."""
+    """Register a new agent in the Nexus network.
+
+    Returns the full agent record including the API key (shown only once).
+    """
     try:
-        return await service.register_agent(payload)
+        agent = await service.register_agent(payload)
+        # Return with API key visible (only time it's shown)
+        data = agent.model_dump(mode="json")
+        return data
     except ValueError as e:
         raise HTTPException(status_code=409, detail=str(e))
 
 
-@router.get("/agents", response_model=list[Agent])
+@router.get("/agents")
 async def list_agents(
     status: AgentStatus | None = Query(None),
     capability: str | None = Query(None),
     tag: str | None = Query(None),
 ):
     """List registered agents with optional filters."""
-    return await service.list_agents(status=status, capability=capability, tag=tag)
+    agents = await service.list_agents(status=status, capability=capability, tag=tag)
+    # Hide API keys in public listings
+    return [_sanitize_agent(a) for a in agents]
 
 
-@router.get("/agents/{agent_id}", response_model=Agent)
+@router.get("/agents/{agent_id}")
 async def get_agent(agent_id: str):
     """Get a specific agent by ID."""
     agent = await service.get_agent(agent_id)
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
-    return agent
+    return _sanitize_agent(agent)
 
 
 @router.patch("/agents/{agent_id}", response_model=Agent)
@@ -85,8 +93,17 @@ async def discover(
                 "name": a.name,
                 "endpoint": a.endpoint,
                 "trust_score": a.trust_score,
+                "auth_enabled": a.auth_enabled,
                 "capabilities": [c.model_dump() for c in a.capabilities if c.name.lower() == capability.lower()],
             }
             for a in agents
         ],
     }
+
+
+def _sanitize_agent(agent: Agent) -> dict:
+    """Return agent data with API key hidden."""
+    data = agent.model_dump(mode="json")
+    if data.get("api_key"):
+        data["api_key"] = data["api_key"][:8] + "..." + data["api_key"][-4:]
+    return data

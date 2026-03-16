@@ -28,7 +28,9 @@ CREATE TABLE IF NOT EXISTS agents (
     registered_at TEXT NOT NULL,
     last_heartbeat TEXT,
     total_interactions    INTEGER DEFAULT 0,
-    successful_interactions INTEGER DEFAULT 0
+    successful_interactions INTEGER DEFAULT 0,
+    api_key       TEXT,
+    auth_enabled  INTEGER DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS interactions (
@@ -47,6 +49,19 @@ CREATE TABLE IF NOT EXISTS interactions (
 CREATE INDEX IF NOT EXISTS idx_interactions_provider ON interactions(provider_id);
 CREATE INDEX IF NOT EXISTS idx_interactions_consumer ON interactions(consumer_id);
 CREATE INDEX IF NOT EXISTS idx_agents_status ON agents(status);
+
+CREATE TABLE IF NOT EXISTS verifications (
+    verification_id TEXT PRIMARY KEY,
+    query           TEXT NOT NULL,
+    capability      TEXT NOT NULL,
+    agents_queried  INTEGER DEFAULT 0,
+    agents_responded INTEGER DEFAULT 0,
+    consensus       INTEGER DEFAULT 0,
+    consensus_score REAL DEFAULT 0.0,
+    best_answer     TEXT DEFAULT '',
+    contradictions  TEXT DEFAULT '[]',
+    created_at      TEXT NOT NULL
+);
 """
 
 

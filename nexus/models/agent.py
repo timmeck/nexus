@@ -64,3 +64,5 @@ class Agent(BaseModel):
     last_heartbeat: datetime | None = None
     total_interactions: int = 0
     successful_interactions: int = 0
+    api_key: str | None = Field(None, description="Agent API key for HMAC auth")
+    auth_enabled: bool = Field(False, description="Whether HMAC auth is active")

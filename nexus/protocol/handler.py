@@ -7,6 +7,7 @@ import time
 
 import httpx
 
+from nexus.auth import sign_request
 from nexus.models.agent import AgentStatus, AgentUpdate
 from nexus.models.protocol import NexusRequest, NexusResponse, ResponseStatus
 from nexus.registry import service as registry
@@ -88,14 +89,24 @@ async def handle_request(request: NexusRequest) -> NexusResponse:
 
 
 async def _forward_to_agent(request: NexusRequest, agent) -> NexusResponse:
-    """Forward a request to an agent's endpoint."""
+    """Forward a request to an agent's endpoint with HMAC signing."""
     url = f"{agent.endpoint.rstrip('/')}/nexus/handle"
 
     try:
+        payload_json = request.model_dump_json()
+        headers = {"Content-Type": "application/json"}
+
+        # Sign request if agent has auth enabled
+        if getattr(agent, "auth_enabled", False) and getattr(agent, "api_key", None):
+            auth_headers = sign_request(payload_json, agent.api_key)
+            headers.update(auth_headers)
+            log.debug("Signed request for agent %s", agent.name)
+
         async with httpx.AsyncClient(timeout=30.0) as client:
             resp = await client.post(
                 url,
-                json=request.model_dump(mode="json"),
+                content=payload_json,
+                headers=headers,
             )
 
             if resp.status_code == 200:
