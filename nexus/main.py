@@ -14,7 +14,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from nexus import __version__
-from nexus.api import protocol, registry, router, trust, websocket
+from nexus.api import protocol, registry, router, trust, websocket, federation
 from nexus.config import STATIC_DIR
 from nexus.database import close_db, get_db
 
@@ -34,6 +34,8 @@ async def lifespan(app: FastAPI):
     log.info("  The network is coming online.")
     log.info("=" * 60)
     await get_db()
+    from nexus.federation.service import ensure_tables
+    await ensure_tables()
     yield
     await close_db()
     log.info("Nexus shut down.")
@@ -61,6 +63,7 @@ app.include_router(protocol.router)
 app.include_router(router.router)
 app.include_router(trust.router)
 app.include_router(websocket.router)
+app.include_router(federation.router)
 
 # Dashboard static files
 STATIC_DIR.mkdir(parents=True, exist_ok=True)
@@ -108,6 +111,9 @@ async def stats():
 
     ws_agents = websocket.get_connected_agents()
 
+    from nexus.federation.service import get_federation_stats
+    fed_stats = await get_federation_stats()
+
     return {
         "agents_total": agents_count,
         "agents_online": online_count,
@@ -115,5 +121,6 @@ async def stats():
         "interactions_total": interactions_count,
         "interactions_successful": success_count,
         "success_rate": round(success_count / interactions_count, 4) if interactions_count > 0 else 0,
+        "federation": fed_stats,
         "version": __version__,
     }
