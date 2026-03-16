@@ -1,0 +1,93 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "nexus"
+version = "0.1.0"
+description = "AI-to-AI Protocol Layer — Standardized discovery, trust, protocol, and routing for autonomous agents."
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.11"
+authors = [
+    {name = "Tim Mecklenburg", email = "tim@timmeck.dev"},
+]
+keywords = ["ai", "agents", "protocol", "a2a", "discovery", "routing", "trust"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Framework :: FastAPI",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: System :: Networking",
+]
+dependencies = [
+    "fastapi==0.115.6",
+    "uvicorn[standard]==0.34.0",
+    "aiosqlite==0.20.0",
+    "pydantic==2.10.4",
+    "websockets==14.1",
+    "httpx==0.28.1",
+    "python-dateutil==2.9.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest==8.3.4",
+    "pytest-asyncio==0.25.0",
+    "pytest-httpx==0.35.0",
+    "ruff>=0.8.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/timmeck/nexus"
+Repository = "https://github.com/timmeck/nexus"
+Issues = "https://github.com/timmeck/nexus/issues"
+
+# ── Pytest ───────────────────────────────────────────────────────────
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+filterwarnings = [
+    "ignore::DeprecationWarning",
+]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks integration tests requiring running services",
+]
+
+# ── Ruff ─────────────────────────────────────────────────────────────
+
+[tool.ruff]
+target-version = "py311"
+line-length = 120
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes
+    "I",    # isort
+    "N",    # pep8-naming
+    "UP",   # pyupgrade
+    "B",    # flake8-bugbear
+    "SIM",  # flake8-simplify
+    "TCH",  # flake8-type-checking
+    "RUF",  # ruff-specific
+]
+ignore = [
+    "E501",   # line length (handled by formatter)
+    "B008",   # function calls in default arguments (FastAPI Depends)
+    "RUF012", # mutable class attributes (Pydantic models)
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["nexus"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"

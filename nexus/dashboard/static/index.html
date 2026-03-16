@@ -1,0 +1,721 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NEXUS — AI-to-AI Protocol Layer</title>
+    <style>
+        :root {
+            --black: #0a0a0a;
+            --bg: #0d0d0d;
+            --surface: #141414;
+            --surface-2: #1a1a1a;
+            --border: #2a2a2a;
+            --gold: #d4a843;
+            --gold-dim: #a07d2e;
+            --gold-bright: #f0c855;
+            --gold-glow: rgba(212, 168, 67, 0.15);
+            --text: #e8e8e8;
+            --text-dim: #888;
+            --green: #4ade80;
+            --red: #f87171;
+            --yellow: #fbbf24;
+            --font: 'SF Mono', 'Cascadia Code', 'Fira Code', 'JetBrains Mono', monospace;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: var(--font);
+            font-size: 13px;
+            line-height: 1.5;
+            overflow-x: hidden;
+        }
+
+        /* ── Header ─────────────────────────────────── */
+        header {
+            background: var(--black);
+            border-bottom: 1px solid var(--border);
+            padding: 16px 32px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .logo-icon {
+            width: 32px;
+            height: 32px;
+            border: 2px solid var(--gold);
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            color: var(--gold);
+            font-weight: 700;
+            box-shadow: 0 0 20px var(--gold-glow);
+        }
+
+        .logo-text {
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--gold);
+            letter-spacing: 4px;
+            text-transform: uppercase;
+        }
+
+        .logo-sub {
+            font-size: 10px;
+            color: var(--text-dim);
+            letter-spacing: 2px;
+            text-transform: uppercase;
+        }
+
+        .header-stats {
+            display: flex;
+            gap: 24px;
+        }
+
+        .header-stat {
+            text-align: right;
+        }
+
+        .header-stat-value {
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--gold);
+        }
+
+        .header-stat-label {
+            font-size: 10px;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        /* ── Main Layout ────────────────────────────── */
+        main {
+            padding: 24px 32px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            max-width: 1600px;
+            margin: 0 auto;
+        }
+
+        .full-width {
+            grid-column: 1 / -1;
+        }
+
+        /* ── Cards ──────────────────────────────────── */
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .card-header {
+            padding: 14px 18px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: var(--surface-2);
+        }
+
+        .card-title {
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--gold);
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
+        .card-body {
+            padding: 18px;
+        }
+
+        .card-badge {
+            font-size: 10px;
+            padding: 2px 8px;
+            border-radius: 4px;
+            background: var(--gold-glow);
+            color: var(--gold);
+            border: 1px solid var(--gold-dim);
+        }
+
+        /* ── Agent Grid ─────────────────────────────── */
+        .agent-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 12px;
+        }
+
+        .agent-card {
+            background: var(--surface-2);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 16px;
+            transition: all 0.2s;
+            cursor: default;
+        }
+
+        .agent-card:hover {
+            border-color: var(--gold-dim);
+            box-shadow: 0 0 20px var(--gold-glow);
+        }
+
+        .agent-name {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text);
+            margin-bottom: 4px;
+        }
+
+        .agent-endpoint {
+            font-size: 11px;
+            color: var(--text-dim);
+            margin-bottom: 10px;
+            word-break: break-all;
+        }
+
+        .agent-meta {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .agent-meta-item {
+            font-size: 11px;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+
+        .status-dot.online { background: var(--green); box-shadow: 0 0 6px var(--green); }
+        .status-dot.offline { background: var(--red); }
+        .status-dot.degraded { background: var(--yellow); }
+
+        .trust-bar {
+            width: 60px;
+            height: 6px;
+            background: var(--border);
+            border-radius: 3px;
+            overflow: hidden;
+            display: inline-block;
+            vertical-align: middle;
+        }
+
+        .trust-fill {
+            height: 100%;
+            border-radius: 3px;
+            transition: width 0.3s;
+        }
+
+        .cap-tag {
+            font-size: 10px;
+            padding: 1px 6px;
+            border-radius: 3px;
+            background: rgba(212, 168, 67, 0.1);
+            color: var(--gold-dim);
+            border: 1px solid rgba(212, 168, 67, 0.2);
+        }
+
+        /* ── Activity Feed ──────────────────────────── */
+        .feed {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .feed-item {
+            padding: 10px 0;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            gap: 12px;
+            align-items: flex-start;
+        }
+
+        .feed-item:last-child { border-bottom: none; }
+
+        .feed-icon {
+            width: 28px;
+            height: 28px;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            flex-shrink: 0;
+        }
+
+        .feed-icon.route { background: rgba(212, 168, 67, 0.15); color: var(--gold); }
+        .feed-icon.success { background: rgba(74, 222, 128, 0.15); color: var(--green); }
+        .feed-icon.fail { background: rgba(248, 113, 113, 0.15); color: var(--red); }
+        .feed-icon.register { background: rgba(96, 165, 250, 0.15); color: #60a5fa; }
+
+        .feed-text {
+            font-size: 12px;
+            color: var(--text);
+        }
+
+        .feed-time {
+            font-size: 10px;
+            color: var(--text-dim);
+        }
+
+        /* ── Request Form ───────────────────────────── */
+        .form-group {
+            margin-bottom: 12px;
+        }
+
+        .form-label {
+            font-size: 10px;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 4px;
+            display: block;
+        }
+
+        .form-input, .form-select, .form-textarea {
+            width: 100%;
+            padding: 8px 12px;
+            background: var(--black);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            color: var(--text);
+            font-family: var(--font);
+            font-size: 12px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        .form-input:focus, .form-select:focus, .form-textarea:focus {
+            border-color: var(--gold-dim);
+        }
+
+        .form-textarea {
+            resize: vertical;
+            min-height: 60px;
+        }
+
+        .btn {
+            padding: 8px 20px;
+            border: 1px solid var(--gold-dim);
+            background: transparent;
+            color: var(--gold);
+            font-family: var(--font);
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn:hover {
+            background: var(--gold);
+            color: var(--black);
+            box-shadow: 0 0 20px var(--gold-glow);
+        }
+
+        .btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+
+        .btn-sm {
+            padding: 4px 10px;
+            font-size: 10px;
+            letter-spacing: 1px;
+        }
+
+        /* ── Response Display ───────────────────────── */
+        .response-box {
+            background: var(--black);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            padding: 14px;
+            font-size: 12px;
+            white-space: pre-wrap;
+            word-break: break-word;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .response-meta {
+            display: flex;
+            gap: 16px;
+            margin-top: 10px;
+            font-size: 11px;
+            color: var(--text-dim);
+        }
+
+        .response-meta span {
+            color: var(--gold);
+        }
+
+        /* ── Empty State ────────────────────────────── */
+        .empty {
+            text-align: center;
+            padding: 40px 20px;
+            color: var(--text-dim);
+        }
+
+        .empty-icon {
+            font-size: 32px;
+            margin-bottom: 12px;
+            color: var(--gold-dim);
+            opacity: 0.5;
+        }
+
+        /* ── Scrollbar ──────────────────────────────── */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: var(--surface); }
+        ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--gold-dim); }
+
+        /* ── Pulse Animation ────────────────────────── */
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .pulse { animation: pulse 2s infinite; }
+
+        /* ── Responsive ─────────────────────────────── */
+        @media (max-width: 900px) {
+            main {
+                grid-template-columns: 1fr;
+                padding: 16px;
+            }
+            header { padding: 12px 16px; flex-wrap: wrap; gap: 12px; }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="logo">
+            <div class="logo-icon">N</div>
+            <div>
+                <div class="logo-text">Nexus</div>
+                <div class="logo-sub">AI-to-AI Protocol Layer</div>
+            </div>
+        </div>
+        <div class="header-stats">
+            <div class="header-stat">
+                <div class="header-stat-value" id="stat-agents">0</div>
+                <div class="header-stat-label">Agents</div>
+            </div>
+            <div class="header-stat">
+                <div class="header-stat-value" id="stat-online">0</div>
+                <div class="header-stat-label">Online</div>
+            </div>
+            <div class="header-stat">
+                <div class="header-stat-value" id="stat-interactions">0</div>
+                <div class="header-stat-label">Interactions</div>
+            </div>
+            <div class="header-stat">
+                <div class="header-stat-value" id="stat-success">0%</div>
+                <div class="header-stat-label">Success Rate</div>
+            </div>
+        </div>
+    </header>
+
+    <main>
+        <!-- Agent Registry -->
+        <div class="card full-width">
+            <div class="card-header">
+                <span class="card-title">Agent Registry</span>
+                <button class="btn btn-sm" onclick="refreshAgents()">Refresh</button>
+            </div>
+            <div class="card-body">
+                <div class="agent-grid" id="agent-grid">
+                    <div class="empty">
+                        <div class="empty-icon">&#9678;</div>
+                        <div>No agents registered yet</div>
+                        <div style="margin-top:8px;font-size:11px">Register agents via the API or use the demo agents</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Send Request -->
+        <div class="card">
+            <div class="card-header">
+                <span class="card-title">Send Request</span>
+            </div>
+            <div class="card-body">
+                <div class="form-group">
+                    <label class="form-label">From Agent ID</label>
+                    <input class="form-input" id="req-from" placeholder="consumer-agent-id" />
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Capability</label>
+                    <input class="form-input" id="req-capability" placeholder="e.g. text_analysis" />
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Query</label>
+                    <textarea class="form-textarea" id="req-query" placeholder="What do you need?"></textarea>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Strategy</label>
+                    <select class="form-select" id="req-strategy">
+                        <option value="best">Best (balanced)</option>
+                        <option value="fastest">Fastest</option>
+                        <option value="cheapest">Cheapest</option>
+                        <option value="trusted">Most Trusted</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Language</label>
+                    <input class="form-input" id="req-lang" value="en" />
+                </div>
+                <button class="btn" id="btn-send" onclick="sendRequest()">Send Request</button>
+
+                <div id="response-area" style="margin-top:16px;display:none">
+                    <div class="form-label">Response</div>
+                    <div class="response-box" id="response-body"></div>
+                    <div class="response-meta" id="response-meta"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Activity Feed -->
+        <div class="card">
+            <div class="card-header">
+                <span class="card-title">Activity Feed</span>
+                <span class="card-badge pulse" id="ws-status">Connecting...</span>
+            </div>
+            <div class="card-body">
+                <div class="feed" id="feed">
+                    <div class="empty">
+                        <div class="empty-icon">&#9670;</div>
+                        <div>Waiting for activity...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        const API = window.location.origin;
+        const WS_URL = `ws://${window.location.host}/ws/dashboard`;
+        let ws = null;
+        const feedItems = [];
+
+        // ── Stats ──────────────────────────────────────
+        async function refreshStats() {
+            try {
+                const res = await fetch(`${API}/api/stats`);
+                const data = await res.json();
+                document.getElementById('stat-agents').textContent = data.agents_total;
+                document.getElementById('stat-online').textContent = data.agents_online;
+                document.getElementById('stat-interactions').textContent = data.interactions_total;
+                document.getElementById('stat-success').textContent =
+                    data.interactions_total > 0
+                        ? `${(data.success_rate * 100).toFixed(1)}%`
+                        : '—';
+            } catch (e) {
+                console.error('Stats fetch failed:', e);
+            }
+        }
+
+        // ── Agents ─────────────────────────────────────
+        async function refreshAgents() {
+            try {
+                const res = await fetch(`${API}/api/registry/agents`);
+                const agents = await res.json();
+                const grid = document.getElementById('agent-grid');
+
+                if (agents.length === 0) {
+                    grid.innerHTML = `
+                        <div class="empty">
+                            <div class="empty-icon">&#9678;</div>
+                            <div>No agents registered yet</div>
+                        </div>`;
+                    return;
+                }
+
+                grid.innerHTML = agents.map(a => {
+                    const trustPct = (a.trust_score * 100).toFixed(0);
+                    const trustColor = a.trust_score > 0.7 ? 'var(--green)'
+                        : a.trust_score > 0.4 ? 'var(--gold)' : 'var(--red)';
+                    const caps = a.capabilities.map(c =>
+                        `<span class="cap-tag">${c.name}</span>`
+                    ).join(' ');
+
+                    return `
+                        <div class="agent-card">
+                            <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+                                <span class="status-dot ${a.status}"></span>
+                                <span class="agent-name">${escHtml(a.name)}</span>
+                            </div>
+                            <div class="agent-endpoint">${escHtml(a.endpoint)}</div>
+                            <div class="agent-meta">
+                                <div class="agent-meta-item">
+                                    Trust:
+                                    <div class="trust-bar">
+                                        <div class="trust-fill" style="width:${trustPct}%;background:${trustColor}"></div>
+                                    </div>
+                                    ${trustPct}%
+                                </div>
+                                <div class="agent-meta-item">
+                                    ${a.total_interactions} interactions
+                                </div>
+                            </div>
+                            <div style="margin-top:8px;display:flex;gap:4px;flex-wrap:wrap">${caps}</div>
+                        </div>`;
+                }).join('');
+            } catch (e) {
+                console.error('Agents fetch failed:', e);
+            }
+        }
+
+        // ── Send Request ───────────────────────────────
+        async function sendRequest() {
+            const btn = document.getElementById('btn-send');
+            btn.disabled = true;
+            btn.textContent = 'SENDING...';
+
+            const payload = {
+                from_agent: document.getElementById('req-from').value || 'dashboard',
+                capability: document.getElementById('req-capability').value || null,
+                query: document.getElementById('req-query').value,
+                language: document.getElementById('req-lang').value || 'en',
+            };
+
+            try {
+                const res = await fetch(`${API}/api/protocol/request`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload),
+                });
+                const data = await res.json();
+
+                document.getElementById('response-area').style.display = 'block';
+                document.getElementById('response-body').textContent =
+                    data.answer || data.error || JSON.stringify(data, null, 2);
+                document.getElementById('response-meta').innerHTML = `
+                    Status: <span>${data.status}</span> &nbsp;|&nbsp;
+                    Confidence: <span>${(data.confidence * 100).toFixed(1)}%</span> &nbsp;|&nbsp;
+                    Cost: <span>${data.cost}</span> &nbsp;|&nbsp;
+                    Time: <span>${data.processing_ms}ms</span>
+                `;
+
+                addFeedItem(
+                    data.status === 'completed' ? 'success' : 'fail',
+                    `Request ${data.status}: "${payload.query.substring(0, 40)}..."`,
+                );
+
+                refreshStats();
+                refreshAgents();
+            } catch (e) {
+                document.getElementById('response-area').style.display = 'block';
+                document.getElementById('response-body').textContent = `Error: ${e.message}`;
+                addFeedItem('fail', `Request failed: ${e.message}`);
+            }
+
+            btn.disabled = false;
+            btn.textContent = 'SEND REQUEST';
+        }
+
+        // ── Feed ───────────────────────────────────────
+        function addFeedItem(type, text) {
+            feedItems.unshift({ type, text, time: new Date() });
+            if (feedItems.length > 50) feedItems.pop();
+            renderFeed();
+        }
+
+        function renderFeed() {
+            const feed = document.getElementById('feed');
+            if (feedItems.length === 0) return;
+
+            const icons = {
+                route: '&#8644;',
+                success: '&#10003;',
+                fail: '&#10007;',
+                register: '&#9733;',
+            };
+
+            feed.innerHTML = feedItems.map(item => `
+                <div class="feed-item">
+                    <div class="feed-icon ${item.type}">${icons[item.type] || '&#9679;'}</div>
+                    <div>
+                        <div class="feed-text">${escHtml(item.text)}</div>
+                        <div class="feed-time">${item.time.toLocaleTimeString()}</div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // ── WebSocket ──────────────────────────────────
+        function connectWs() {
+            const badge = document.getElementById('ws-status');
+            try {
+                ws = new WebSocket(WS_URL);
+                ws.onopen = () => {
+                    badge.textContent = 'Live';
+                    badge.style.background = 'rgba(74,222,128,0.15)';
+                    badge.style.color = 'var(--green)';
+                    badge.style.borderColor = 'rgba(74,222,128,0.3)';
+                };
+                ws.onmessage = (e) => {
+                    try {
+                        const msg = JSON.parse(e.data);
+                        addFeedItem(msg.type || 'route', msg.data?.message || JSON.stringify(msg.data));
+                        refreshStats();
+                        refreshAgents();
+                    } catch (err) {
+                        console.error('WS parse error:', err);
+                    }
+                };
+                ws.onclose = () => {
+                    badge.textContent = 'Disconnected';
+                    badge.style.background = 'rgba(248,113,113,0.15)';
+                    badge.style.color = 'var(--red)';
+                    badge.style.borderColor = 'rgba(248,113,113,0.3)';
+                    setTimeout(connectWs, 3000);
+                };
+                ws.onerror = () => ws.close();
+            } catch (e) {
+                setTimeout(connectWs, 3000);
+            }
+        }
+
+        // ── Utils ──────────────────────────────────────
+        function escHtml(s) {
+            const d = document.createElement('div');
+            d.textContent = s;
+            return d.innerHTML;
+        }
+
+        // ── Init ───────────────────────────────────────
+        refreshStats();
+        refreshAgents();
+        connectWs();
+        setInterval(refreshStats, 5000);
+        setInterval(refreshAgents, 10000);
+    </script>
+</body>
+</html>

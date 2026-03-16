@@ -1,0 +1,54 @@
+services:
+  # ── Nexus Core ───────────────────────────────────────────────────
+  nexus:
+    build: .
+    container_name: nexus-core
+    ports:
+      - "9500:9500"
+    volumes:
+      - nexus-data:/app/data
+    environment:
+      - PYTHONUNBUFFERED=1
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:9500/health')"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # ── Demo: Provider Agent ─────────────────────────────────────────
+  provider:
+    build: .
+    container_name: nexus-provider
+    command: python -m agents.provider
+    ports:
+      - "9501:9501"
+    environment:
+      - NEXUS_URL=http://nexus:9500
+      - PYTHONUNBUFFERED=1
+    depends_on:
+      nexus:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ── Demo: Consumer Agent ─────────────────────────────────────────
+  consumer:
+    build: .
+    container_name: nexus-consumer
+    command: python -m agents.consumer
+    ports:
+      - "9502:9502"
+    environment:
+      - NEXUS_URL=http://nexus:9500
+      - PYTHONUNBUFFERED=1
+    depends_on:
+      nexus:
+        condition: service_healthy
+      provider:
+        condition: service_started
+    restart: unless-stopped
+
+volumes:
+  nexus-data:
+    driver: local
