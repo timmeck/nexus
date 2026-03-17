@@ -641,6 +641,37 @@
                 </div>
             </div>
         </div>
+        <!-- Defense Overview -->
+        <div class="card">
+            <div class="card-header">
+                <span class="card-title">Defense Layer</span>
+                <button class="btn btn-sm" onclick="refreshDefense()">Refresh</button>
+            </div>
+            <div class="card-body">
+                <div id="defense-list">
+                    <div class="empty">
+                        <div class="empty-icon">&#9670;</div>
+                        <div>Click Refresh to load defense stats</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Policy & Compliance -->
+        <div class="card">
+            <div class="card-header">
+                <span class="card-title">Policy & Compliance</span>
+                <button class="btn btn-sm" onclick="refreshPolicy()">Refresh</button>
+            </div>
+            <div class="card-body">
+                <div id="policy-list">
+                    <div class="empty">
+                        <div class="empty-icon">&#9670;</div>
+                        <div>Click Refresh to load policy stats</div>
+                    </div>
+                </div>
+            </div>
+        </div>
     </main>
 
     <script>
@@ -992,6 +1023,68 @@
                 `).join('');
             } catch (e) {
                 console.error('Schemas fetch failed:', e);
+            }
+        }
+
+        // ── Defense ──────────────────────────────────────
+        async function refreshDefense() {
+            try {
+                const res = await fetch(`${API}/api/defense/stats`);
+                const data = await res.json();
+                const list = document.getElementById('defense-list');
+
+                list.innerHTML = `
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+                        <div style="padding:12px;background:var(--surface-2);border-radius:6px;border:1px solid var(--border)">
+                            <div style="font-size:20px;font-weight:700;color:var(--red)">${data.total_slashes}</div>
+                            <div style="font-size:10px;color:var(--text-dim);text-transform:uppercase">Slashes</div>
+                        </div>
+                        <div style="padding:12px;background:var(--surface-2);border-radius:6px;border:1px solid var(--border)">
+                            <div style="font-size:20px;font-weight:700;color:var(--gold)">${data.escrows_held}</div>
+                            <div style="font-size:10px;color:var(--text-dim);text-transform:uppercase">Escrows Held</div>
+                        </div>
+                        <div style="padding:12px;background:var(--surface-2);border-radius:6px;border:1px solid var(--border)">
+                            <div style="font-size:20px;font-weight:700;color:var(--text)">${data.challenges_total}</div>
+                            <div style="font-size:10px;color:var(--text-dim);text-transform:uppercase">Challenges</div>
+                        </div>
+                        <div style="padding:12px;background:var(--surface-2);border-radius:6px;border:1px solid var(--border)">
+                            <div style="font-size:20px;font-weight:700;color:${data.challenges_upheld > 0 ? 'var(--red)' : 'var(--green)'}">${data.challenges_upheld}</div>
+                            <div style="font-size:10px;color:var(--text-dim);text-transform:uppercase">Upheld</div>
+                        </div>
+                    </div>`;
+            } catch (e) {
+                console.error('Defense fetch failed:', e);
+            }
+        }
+
+        // ── Policy ──────────────────────────────────────
+        async function refreshPolicy() {
+            try {
+                const res = await fetch(`${API}/api/policy/stats`);
+                const data = await res.json();
+                const list = document.getElementById('policy-list');
+
+                list.innerHTML = `
+                    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;font-size:11px">
+                        <div style="padding:10px;background:var(--surface-2);border-radius:6px;border:1px solid var(--border);text-align:center">
+                            <div style="font-size:18px;font-weight:700;color:var(--gold)">${data.agents_with_locality}</div>
+                            <div style="color:var(--text-dim)">Localities</div>
+                        </div>
+                        <div style="padding:10px;background:var(--surface-2);border-radius:6px;border:1px solid var(--border);text-align:center">
+                            <div style="font-size:18px;font-weight:700;color:var(--green)">${data.verified_claims}/${data.compliance_claims}</div>
+                            <div style="color:var(--text-dim)">Claims</div>
+                        </div>
+                        <div style="padding:10px;background:var(--surface-2);border-radius:6px;border:1px solid var(--border);text-align:center">
+                            <div style="font-size:18px;font-weight:700;color:var(--gold)">${data.active_policies}</div>
+                            <div style="color:var(--text-dim)">Policies</div>
+                        </div>
+                    </div>
+                    <div style="margin-top:10px;display:flex;justify-content:space-between;font-size:10px;color:var(--text-dim)">
+                        <span>Gateways: ${data.active_gateways}</span>
+                        <span>Audit events: ${data.audit_events}</span>
+                    </div>`;
+            } catch (e) {
+                console.error('Policy fetch failed:', e);
             }
         }
 

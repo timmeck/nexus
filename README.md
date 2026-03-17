@@ -180,11 +180,13 @@ Consumer Agent                    Nexus                     Provider Agent
 |--------|----------|-------------|
 | `GET` | `/api/trust/report/{id}` | Trust report |
 | `GET` | `/api/trust/history/{id}` | Interaction history |
-| `POST` | `/api/defense/slash/{id}` | Slash agent |
-| `POST` | `/api/defense/challenge` | Challenge response |
-| `GET` | `/api/defense/escrow` | List escrows |
-| `POST` | `/api/defense/dispute/{id}` | Dispute escrow |
-| `GET` | `/api/defense/sybil-report` | Sybil analysis |
+| `POST` | `/api/defense/slash` | Slash agent |
+| `POST` | `/api/defense/challenges` | Challenge output |
+| `POST` | `/api/defense/challenges/{id}/resolve` | Resolve challenge |
+| `GET` | `/api/defense/escrows` | List escrows |
+| `POST` | `/api/defense/escrows/{id}/dispute` | Dispute escrow |
+| `GET` | `/api/defense/sybil/clusters` | Sybil analysis |
+| `GET` | `/api/defense/sybil/maturity/{id}` | Agent maturity |
 
 ### Federation
 | Method | Endpoint | Description |
@@ -198,16 +200,22 @@ Consumer Agent                    Nexus                     Provider Agent
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | `GET` | `/api/payments/wallets` | List wallets |
-| `POST` | `/api/payments/deposit` | Add credits |
-| `GET` | `/api/payments/transactions` | Transaction history |
+| `GET` | `/api/payments/wallets/{id}` | Get wallet |
+| `POST` | `/api/payments/wallets/{id}/topup` | Add credits |
+| `GET` | `/api/payments/transactions/{id}` | Transaction history |
+| `GET` | `/api/payments/stats` | Payment stats |
 
 ### Policy
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | `POST` | `/api/policy/locality` | Set data locality |
+| `GET` | `/api/policy/localities` | List all localities |
 | `POST` | `/api/policy/compliance` | Submit compliance claim |
-| `GET` | `/api/policy/compliance/{id}` | Verify claim |
-| `POST` | `/api/policy/gateway` | Register edge gateway |
+| `GET` | `/api/policy/compliance/{agent_id}` | Agent claims |
+| `POST` | `/api/policy/compliance/{claim_id}/verify` | Verify claim |
+| `POST` | `/api/policy/routing` | Create routing policy |
+| `POST` | `/api/policy/gateways` | Register edge gateway |
+| `GET` | `/api/policy/audit` | Audit trail |
 
 ### System
 | Method | Endpoint | Description |
