@@ -1,11 +1,15 @@
-"""Multi-Agent Verification — Send same query to N agents, compare responses."""
+"""Multi-Agent Verification — Send same query to N agents, compare responses.
+
+Verification is now capability-aware: structured outputs use field-level
+comparison, open-ended outputs use text similarity. The verifier is selected
+based on the capability name or an explicit override.
+"""
 
 from __future__ import annotations
 
 import asyncio
 import logging
 import time
-from difflib import SequenceMatcher
 
 import httpx
 
@@ -13,11 +17,13 @@ from nexus.auth import sign_request
 from nexus.models.protocol import NexusRequest
 from nexus.models.verification import (
     AgentAnswer,
+    Verdict,
     VerificationRequest,
     VerificationResult,
 )
 from nexus.registry import service as registry
 from nexus.trust import service as trust
+from nexus.verification.verifiers import get_verification_mode, run_verifier
 
 log = logging.getLogger("nexus.verification")
 
@@ -25,11 +31,15 @@ log = logging.getLogger("nexus.verification")
 async def verify(request: VerificationRequest) -> VerificationResult:
     """Send a query to multiple agents and compare their responses.
 
-    1. Find agents with the requested capability
-    2. Send the same query to all of them in parallel
-    3. Compare responses and detect contradictions
-    4. Return consensus score and best answer
+    1. Determine verification mode from capability (or override)
+    2. Find agents with the requested capability
+    3. Send the same query to all of them in parallel
+    4. Run the appropriate verifier
+    5. Return verdict + consensus score + best answer
     """
+    # Determine verification mode
+    mode = get_verification_mode(request.capability, request.verification_mode)
+
     # Find capable agents
     candidates = await registry.find_by_capability(
         capability=request.capability,
@@ -40,6 +50,8 @@ async def verify(request: VerificationRequest) -> VerificationResult:
         return VerificationResult(
             query=request.query,
             capability=request.capability,
+            verification_mode=mode,
+            verdict=Verdict.INCONCLUSIVE,
             agents_queried=len(candidates),
             agents_responded=0,
             consensus=False,
@@ -57,6 +69,8 @@ async def verify(request: VerificationRequest) -> VerificationResult:
         return VerificationResult(
             query=request.query,
             capability=request.capability,
+            verification_mode=mode,
+            verdict=Verdict.INCONCLUSIVE,
             agents_queried=len(candidates),
             agents_responded=len(successful),
             consensus=False,
@@ -66,11 +80,15 @@ async def verify(request: VerificationRequest) -> VerificationResult:
             contradictions=["Not enough successful responses for verification"],
         )
 
-    # Compare responses
-    consensus_score, contradictions = _analyze_consensus(successful)
-    consensus = consensus_score >= 0.6
+    # Run the capability-appropriate verifier
+    verdict, consensus_score, contradictions = run_verifier(
+        mode=mode,
+        answers=successful,
+        expected_schema=request.expected_schema,
+    )
+    consensus = verdict == Verdict.PASS
 
-    # Pick best answer: highest confidence among consensus-supporting answers
+    # Pick best answer: highest confidence among successful
     best = max(successful, key=lambda a: a.confidence)
 
     # Record verified interactions
@@ -86,9 +104,12 @@ async def verify(request: VerificationRequest) -> VerificationResult:
         )
 
     log.info(
-        "Verification complete: %d/%d responded, consensus=%.2f, contradictions=%d",
+        "Verification [%s/%s]: %d/%d responded, verdict=%s, score=%.2f, contradictions=%d",
+        mode,
+        request.capability,
         len(successful),
         len(candidates),
+        verdict,
         consensus_score,
         len(contradictions),
     )
@@ -96,10 +117,12 @@ async def verify(request: VerificationRequest) -> VerificationResult:
     return VerificationResult(
         query=request.query,
         capability=request.capability,
+        verification_mode=mode,
+        verdict=verdict,
         agents_queried=len(candidates),
         agents_responded=len(successful),
         consensus=consensus,
-        consensus_score=round(consensus_score, 4),
+        consensus_score=consensus_score,
         best_answer=best.answer,
         answers=answers,
         contradictions=contradictions,
@@ -197,40 +220,3 @@ async def _query_single_agent(agent, request: VerificationRequest) -> AgentAnswe
             status="failed",
             error=str(e),
         )
-
-
-def _analyze_consensus(answers: list[AgentAnswer]) -> tuple[float, list[str]]:
-    """Analyze agreement between agent answers.
-
-    Returns (consensus_score, contradictions).
-    consensus_score: 0.0 = total disagreement, 1.0 = perfect agreement.
-    """
-    if len(answers) < 2:
-        return 1.0, []
-
-    texts = [a.answer.strip().lower() for a in answers]
-    contradictions = []
-
-    # Pairwise similarity using SequenceMatcher
-    total_similarity = 0.0
-    pairs = 0
-
-    for i in range(len(texts)):
-        for j in range(i + 1, len(texts)):
-            sim = SequenceMatcher(None, texts[i], texts[j]).ratio()
-            total_similarity += sim
-            pairs += 1
-
-            if sim < 0.3:
-                contradictions.append(f"{answers[i].agent_name} vs {answers[j].agent_name}: low similarity ({sim:.1%})")
-
-    avg_similarity = total_similarity / pairs if pairs > 0 else 0.0
-
-    # Weight by confidence
-    total_confidence = sum(a.confidence for a in answers)
-    if total_confidence > 0:
-        weighted_score = sum(a.confidence / total_confidence * avg_similarity for a in answers)
-    else:
-        weighted_score = avg_similarity
-
-    return weighted_score, contradictions

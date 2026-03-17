@@ -2,10 +2,27 @@
 
 from __future__ import annotations
 
+import enum
 import uuid
 from datetime import datetime
 
 from pydantic import BaseModel, Field
+
+
+class VerificationMode(enum.StrEnum):
+    """How verification is performed — tied to capability type."""
+
+    TEXT_SIMILARITY = "text_similarity"  # Generic: SequenceMatcher consensus
+    STRUCTURED = "structured"  # JSON schema / deterministic field match
+    # Future: CODE = "code", RETRIEVAL = "retrieval"
+
+
+class Verdict(enum.StrEnum):
+    """Verification outcome — determines settlement path."""
+
+    PASS = "pass"
+    FAIL = "fail"
+    INCONCLUSIVE = "inconclusive"
 
 
 class VerificationRequest(BaseModel):
@@ -16,6 +33,10 @@ class VerificationRequest(BaseModel):
     from_agent: str = Field("verification-system", description="Requester ID")
     min_agents: int = Field(3, ge=2, le=10, description="Minimum agents required")
     language: str = Field("en")
+    verification_mode: VerificationMode | None = Field(
+        None, description="Override verification mode (auto-detected from capability if None)"
+    )
+    expected_schema: dict | None = Field(None, description="JSON schema for structured verification")
 
 
 class AgentAnswer(BaseModel):
@@ -36,6 +57,8 @@ class VerificationResult(BaseModel):
     verification_id: str = Field(default_factory=lambda: uuid.uuid4().hex[:12])
     query: str
     capability: str
+    verification_mode: VerificationMode = VerificationMode.TEXT_SIMILARITY
+    verdict: Verdict = Verdict.INCONCLUSIVE
     agents_queried: int
     agents_responded: int
     consensus: bool = Field(description="Whether agents reached consensus")
