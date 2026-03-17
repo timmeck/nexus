@@ -1,6 +1,6 @@
 # Nexus
 
-**AI-to-AI Protocol Layer** | 9 Layers | 15 Features | 126 Tests
+**AI-to-AI Protocol Layer** | 9 Layers | 15 Features | 141 Tests
 
 [![CI](https://github.com/timmeck/nexus/actions/workflows/ci.yml/badge.svg)](https://github.com/timmeck/nexus/actions/workflows/ci.yml)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/downloads/)
@@ -174,6 +174,7 @@ State transitions are validated — illegal jumps (e.g. ROUTED → SETTLED) rais
 | `PATCH` | `/api/registry/agents/{id}` | Update agent |
 | `DELETE` | `/api/registry/agents/{id}` | Unregister |
 | `POST` | `/api/registry/agents/{id}/heartbeat` | Heartbeat |
+| `GET` | `/api/registry/agents/{id}/health` | Full health assessment |
 | `GET` | `/api/registry/discover` | Find by capability |
 
 ### Protocol
@@ -189,6 +190,7 @@ State transitions are validated — illegal jumps (e.g. ROUTED → SETTLED) rais
 |--------|----------|-------------|
 | `GET` | `/api/trust/report/{id}` | Trust report |
 | `GET` | `/api/trust/history/{id}` | Interaction history |
+| `GET` | `/api/trust/ledger/{id}` | Trust delta ledger (append-only) |
 | `POST` | `/api/defense/slash` | Slash agent |
 | `POST` | `/api/defense/challenges` | Challenge output |
 | `POST` | `/api/defense/challenges/{id}/resolve` | Resolve challenge |
@@ -309,7 +311,7 @@ docker compose up -d
 
 ```bash
 pytest -v
-# 126 passed
+# 141 passed
 ```
 
 ## Tech Stack
