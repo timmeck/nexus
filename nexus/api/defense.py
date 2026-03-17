@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
 from nexus.defense import service as defense
@@ -11,6 +11,7 @@ router = APIRouter(prefix="/api/defense", tags=["defense"])
 
 
 # ── Models ────────────────────────────────────────────────────────
+
 
 class SlashRequest(BaseModel):
     agent_id: str
@@ -38,6 +39,7 @@ class DisputeRequest(BaseModel):
 
 # ── Slashing ──────────────────────────────────────────────────────
 
+
 @router.post("/slash")
 async def slash_agent(body: SlashRequest):
     """Slash an agent for bad output — loses trust and credits."""
@@ -51,15 +53,16 @@ async def slash_agent(body: SlashRequest):
 
 
 @router.get("/slashes")
-async def slashing_history(agent_id: str = None, limit: int = 50):
+async def slashing_history(agent_id: str | None = None, limit: int = 50):
     """Get slashing log."""
     return {"slashes": await defense.get_slashing_history(agent_id=agent_id, limit=limit)}
 
 
 # ── Escrow ────────────────────────────────────────────────────────
 
+
 @router.get("/escrows")
-async def list_escrows(status: str = None, limit: int = 50):
+async def list_escrows(status: str | None = None, limit: int = 50):
     """List escrow records."""
     return {"escrows": await defense.list_escrows(status=status, limit=limit)}
 
@@ -85,6 +88,7 @@ async def release_mature():
 
 # ── Challenges ────────────────────────────────────────────────────
 
+
 @router.post("/challenges")
 async def create_challenge(body: ChallengeRequest):
     """Challenge another agent's output. Costs a fee."""
@@ -107,12 +111,13 @@ async def resolve_challenge(challenge_id: str, body: ChallengeResolve):
 
 
 @router.get("/challenges")
-async def list_challenges(status: str = None, limit: int = 50):
+async def list_challenges(status: str | None = None, limit: int = 50):
     """List challenges."""
     return {"challenges": await defense.list_challenges(status=status, limit=limit)}
 
 
 # ── Sybil Detection ──────────────────────────────────────────────
+
 
 @router.get("/sybil/rate")
 async def registration_rate():
@@ -134,6 +139,7 @@ async def sybil_clusters():
 
 
 # ── Stats ─────────────────────────────────────────────────────────
+
 
 @router.get("/stats")
 async def defense_stats():

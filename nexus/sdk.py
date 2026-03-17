@@ -30,14 +30,16 @@ Usage in your product:
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import time
 import uuid
-from datetime import datetime, timezone
-from typing import Any, Callable, Coroutine
+from collections.abc import Callable, Coroutine
+from datetime import UTC, datetime
+from typing import Any
 
 import httpx
-from fastapi import FastAPI, Request, Response
+from fastapi import FastAPI, Request  # noqa: TC002 (runtime: route registration)
 from pydantic import BaseModel, Field
 
 from nexus.auth import verify_signature
@@ -77,9 +79,7 @@ class NexusSDKResponse(BaseModel):
     processing_ms: int = 0
     error: str | None = None
     meta: dict = Field(default_factory=dict)
-    created_at: str = Field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
-    )
+    created_at: str = Field(default_factory=lambda: datetime.now(UTC).isoformat())
 
 
 # Type alias for handler functions
@@ -108,7 +108,7 @@ class NexusAdapter:
         self.app = app
         self.agent_name = agent_name
         self.nexus_url = nexus_url.rstrip("/")
-        self.endpoint = endpoint or f"http://localhost:8000"
+        self.endpoint = endpoint or "http://localhost:8000"
         self.capabilities = capabilities or []
         self.tags = tags or []
         self.description = description
@@ -130,9 +130,11 @@ class NexusAdapter:
         The handler receives (query: str, params: dict) and must return
         a dict with at least {"result": str, "confidence": float}.
         """
+
         def decorator(func: HandlerFunc):
             self._handlers[capability] = func
             return func
+
         return decorator
 
     def _register_route(self):
@@ -157,6 +159,7 @@ class NexusAdapter:
                     ).model_dump()
 
             import json
+
             req_data = json.loads(body_str)
             req = NexusSDKRequest(**req_data)
 
@@ -226,10 +229,8 @@ class NexusAdapter:
             # Cleanup
             if adapter._heartbeat_task:
                 adapter._heartbeat_task.cancel()
-                try:
+                with contextlib.suppress(asyncio.CancelledError):
                     await adapter._heartbeat_task
-                except asyncio.CancelledError:
-                    pass
 
             if original_lifespan:
                 await ctx.__aexit__(None, None, None)

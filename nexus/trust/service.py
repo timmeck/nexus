@@ -38,8 +38,18 @@ async def record_interaction(
            (interaction_id, request_id, consumer_id, provider_id,
             success, confidence, verified, cost, response_ms, created_at)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-        (interaction_id, request_id, consumer_id, provider_id,
-         int(success), confidence, int(verified), cost, response_ms, now),
+        (
+            interaction_id,
+            request_id,
+            consumer_id,
+            provider_id,
+            int(success),
+            confidence,
+            int(verified),
+            cost,
+            response_ms,
+            now,
+        ),
     )
 
     # Update agent stats
@@ -67,7 +77,10 @@ async def record_interaction(
     await db.commit()
     log.info(
         "Interaction %s: provider=%s success=%s trust_delta=%.3f",
-        interaction_id, provider_id, success, delta,
+        interaction_id,
+        provider_id,
+        success,
+        delta,
     )
 
     return InteractionRecord(

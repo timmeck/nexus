@@ -12,14 +12,12 @@ Concepts:
 
 from __future__ import annotations
 
-import asyncio
 import logging
 from datetime import datetime
 
 import httpx
 
-from nexus.database import get_db, to_json, from_json
-from nexus.models.agent import Agent, Capability, AgentStatus
+from nexus.database import from_json, get_db, to_json
 
 log = logging.getLogger("nexus.federation")
 
@@ -61,9 +59,11 @@ async def ensure_tables():
 
 # ── Peer Management ────────────────────────────────────────────────
 
+
 async def add_peer(name: str, endpoint: str) -> dict:
     """Add a peer Nexus instance."""
     import uuid
+
     db = await get_db()
     peer_id = uuid.uuid4().hex[:12]
     now = datetime.utcnow().isoformat()
@@ -76,7 +76,8 @@ async def add_peer(name: str, endpoint: str) -> dict:
 
     await db.execute(
         "INSERT INTO peers (id, name, endpoint, status, registered_at) VALUES (?, ?, ?, 'unknown', ?)",
-        (peer_id, name, endpoint.rstrip("/"), now))
+        (peer_id, name, endpoint.rstrip("/"), now),
+    )
     await db.commit()
     log.info("Added peer: %s at %s", name, endpoint)
     return {"id": peer_id, "name": name, "endpoint": endpoint}
@@ -97,6 +98,7 @@ async def remove_peer(peer_id: str) -> bool:
 
 
 # ── Sync ───────────────────────────────────────────────────────────
+
 
 async def sync_peer(peer_id: str) -> dict:
     """Sync agent registry with a peer. Pull their agents into remote_agents."""
@@ -127,19 +129,24 @@ async def sync_peer(peer_id: str) -> dict:
             await db.execute(
                 "INSERT OR REPLACE INTO remote_agents (id, peer_id, name, description, capabilities, tags, trust_score, endpoint, synced_at) "
                 "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                (agent_id, peer_id, agent.get("name", ""),
-                 agent.get("description", ""),
-                 to_json(caps) if isinstance(caps, list) else caps,
-                 to_json(tags) if isinstance(tags, list) else tags,
-                 agent.get("trust_score", 0.5),
-                 agent.get("endpoint", endpoint),
-                 now))
+                (
+                    agent_id,
+                    peer_id,
+                    agent.get("name", ""),
+                    agent.get("description", ""),
+                    to_json(caps) if isinstance(caps, list) else caps,
+                    to_json(tags) if isinstance(tags, list) else tags,
+                    agent.get("trust_score", 0.5),
+                    agent.get("endpoint", endpoint),
+                    now,
+                ),
+            )
             count += 1
 
         # Update peer status
         await db.execute(
-            "UPDATE peers SET status = 'online', agent_count = ?, last_sync_at = ? WHERE id = ?",
-            (count, now, peer_id))
+            "UPDATE peers SET status = 'online', agent_count = ?, last_sync_at = ? WHERE id = ?", (count, now, peer_id)
+        )
         await db.commit()
 
         log.info("Synced %d agents from peer %s (%s)", count, peer["name"], endpoint)
@@ -164,10 +171,13 @@ async def sync_all_peers() -> list[dict]:
 
 # ── Discovery (federated) ─────────────────────────────────────────
 
-async def search_remote_agents(capability: str = None, tag: str = None) -> list[dict]:
+
+async def search_remote_agents(capability: str | None = None, tag: str | None = None) -> list[dict]:
     """Search agents across all peers."""
     db = await get_db()
-    rows = await db.execute("SELECT ra.*, p.name as peer_name, p.endpoint as peer_endpoint FROM remote_agents ra JOIN peers p ON ra.peer_id = p.id ORDER BY ra.trust_score DESC")
+    rows = await db.execute(
+        "SELECT ra.*, p.name as peer_name, p.endpoint as peer_endpoint FROM remote_agents ra JOIN peers p ON ra.peer_id = p.id ORDER BY ra.trust_score DESC"
+    )
     agents = [dict(r) for r in await rows.fetchall()]
 
     # Parse JSON fields
@@ -179,10 +189,14 @@ async def search_remote_agents(capability: str = None, tag: str = None) -> list[
 
     # Filter by capability
     if capability:
-        agents = [a for a in agents if any(
-            (c.get("name", "") if isinstance(c, dict) else "").lower() == capability.lower()
-            for c in (a.get("capabilities") or [])
-        )]
+        agents = [
+            a
+            for a in agents
+            if any(
+                (c.get("name", "") if isinstance(c, dict) else "").lower() == capability.lower()
+                for c in (a.get("capabilities") or [])
+            )
+        ]
 
     # Filter by tag
     if tag:
@@ -203,6 +217,7 @@ async def forward_request(peer_endpoint: str, request_data: dict) -> dict:
 
 
 # ── Federation Info ────────────────────────────────────────────────
+
 
 async def get_federation_stats() -> dict:
     db = await get_db()

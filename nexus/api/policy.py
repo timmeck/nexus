@@ -12,6 +12,7 @@ router = APIRouter(prefix="/api/policy", tags=["policy"])
 
 # ── Models ────────────────────────────────────────────────────────
 
+
 class LocalityRequest(BaseModel):
     agent_id: str
     region: str = Field(..., description="e.g. 'eu', 'us', 'asia', 'global'")
@@ -44,6 +45,7 @@ class GatewayRequest(BaseModel):
 
 # ── Data Locality ─────────────────────────────────────────────────
 
+
 @router.post("/locality")
 async def set_locality(body: LocalityRequest):
     """Set geographic/jurisdiction info for an agent."""
@@ -73,6 +75,7 @@ async def list_localities():
 
 
 # ── Compliance Claims ─────────────────────────────────────────────
+
 
 @router.get("/compliance/types")
 async def list_claim_types():
@@ -106,6 +109,7 @@ async def verify_claim(claim_id: str):
 
 
 # ── Routing Policies ──────────────────────────────────────────────
+
 
 @router.post("/routing")
 async def create_policy(body: PolicyCreateRequest):
@@ -150,6 +154,7 @@ async def delete_policy(policy_id: str):
 
 # ── Edge Gateways ─────────────────────────────────────────────────
 
+
 @router.post("/gateways")
 async def add_gateway(body: GatewayRequest):
     """Register an edge gateway."""
@@ -178,14 +183,16 @@ async def delete_gateway(config_id: str):
 
 # ── Audit Trail ───────────────────────────────────────────────────
 
+
 @router.get("/audit")
-async def audit_log(event_type: str = None, agent_id: str = None, limit: int = 100):
+async def audit_log(event_type: str | None = None, agent_id: str | None = None, limit: int = 100):
     """Query the audit trail."""
     events = await policy.get_audit_log(event_type=event_type, agent_id=agent_id, limit=limit)
     return {"events": events, "count": len(events)}
 
 
 # ── Stats ─────────────────────────────────────────────────────────
+
 
 @router.get("/stats")
 async def policy_stats():

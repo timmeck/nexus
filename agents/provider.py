@@ -12,8 +12,8 @@ import logging
 import re
 import time
 import uuid
-from contextlib import asynccontextmanager
-from datetime import datetime, timezone
+from contextlib import asynccontextmanager, suppress
+from datetime import UTC, datetime
 from typing import Any
 
 import httpx
@@ -71,9 +71,7 @@ class NexusResponse(BaseModel):
     processing_ms: int = 0
     error: str | None = None
     meta: dict[str, Any] = Field(default_factory=dict)
-    created_at: str = Field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
-    )
+    created_at: str = Field(default_factory=lambda: datetime.now(UTC).isoformat())
 
 
 # ---------------------------------------------------------------------------
@@ -111,8 +109,22 @@ REGISTRATION_PAYLOAD: dict[str, Any] = {
 def _detect_language(text: str) -> str:
     """Heuristic language detection (German vs English)."""
     german_markers = [
-        "der", "die", "das", "und", "ist", "ein", "eine", "nicht",
-        "ich", "sie", "es", "wir", "auf", "mit", "den", "dem",
+        "der",
+        "die",
+        "das",
+        "und",
+        "ist",
+        "ein",
+        "eine",
+        "nicht",
+        "ich",
+        "sie",
+        "es",
+        "wir",
+        "auf",
+        "mit",
+        "den",
+        "dem",
     ]
     words = re.findall(r"\w+", text.lower())
     if not words:
@@ -242,10 +254,8 @@ async def lifespan(_app: FastAPI):
     yield
     if _heartbeat_task is not None:
         _heartbeat_task.cancel()
-        try:
+        with suppress(asyncio.CancelledError):
             await _heartbeat_task
-        except asyncio.CancelledError:
-            pass
     logger.info("Provider agent shut down")
 
 

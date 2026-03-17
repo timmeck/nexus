@@ -4,11 +4,10 @@ from __future__ import annotations
 
 import json
 import logging
-from pathlib import Path
 
 import aiosqlite
 
-from nexus.config import DB_PATH, DATA_DIR
+from nexus.config import DATA_DIR, DB_PATH
 
 log = logging.getLogger("nexus.db")
 

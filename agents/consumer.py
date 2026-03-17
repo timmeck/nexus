@@ -12,8 +12,8 @@ import logging
 import sys
 import time
 import uuid
-from contextlib import asynccontextmanager
-from datetime import datetime, timezone
+from contextlib import asynccontextmanager, suppress
+from datetime import UTC, datetime
 from typing import Any
 
 import httpx
@@ -71,9 +71,7 @@ class NexusResponse(BaseModel):
     processing_ms: int = 0
     error: str | None = None
     meta: dict[str, Any] = Field(default_factory=dict)
-    created_at: str = Field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
-    )
+    created_at: str = Field(default_factory=lambda: datetime.now(UTC).isoformat())
 
 
 # ---------------------------------------------------------------------------
@@ -175,10 +173,8 @@ async def lifespan(_app: FastAPI):
     yield
     if _heartbeat_task is not None:
         _heartbeat_task.cancel()
-        try:
+        with suppress(asyncio.CancelledError):
             await _heartbeat_task
-        except asyncio.CancelledError:
-            pass
     logger.info("Consumer agent shut down")
 
 
@@ -206,8 +202,7 @@ async def handle_nexus_request(req: NexusRequest) -> NexusResponse:
     )
 
     answer = (
-        f"Consumer received query: '{req.query}'. "
-        f"In production this would be delegated to an appropriate provider."
+        f"Consumer received query: '{req.query}'. In production this would be delegated to an appropriate provider."
     )
     elapsed_ms = (time.perf_counter_ns() - start) // 1_000_000
 
@@ -284,7 +279,7 @@ async def cli_loop() -> None:
 
         if user_input.lower().startswith("analyze:"):
             capability = "text_analysis"
-            query = user_input[len("analyze:"):].strip()
+            query = user_input[len("analyze:") :].strip()
         else:
             parts = user_input.split()
             remaining: list[str] = []

@@ -45,7 +45,7 @@ async def sync_all():
 
 
 @router.get("/agents")
-async def search_remote(capability: str = None, tag: str = None):
+async def search_remote(capability: str | None = None, tag: str | None = None):
     return {"remote_agents": await fed.search_remote_agents(capability=capability, tag=tag)}
 
 

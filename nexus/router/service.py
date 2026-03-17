@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import logging
 
-from nexus.models.agent import Agent
-from nexus.models.protocol import NexusRequest
+from nexus.models.agent import Agent  # noqa: TC001
+from nexus.models.protocol import NexusRequest  # noqa: TC001
 from nexus.registry import service as registry
 
 log = logging.getLogger("nexus.router")
@@ -66,10 +66,7 @@ async def route(
 
     # Apply budget filter
     if request.budget is not None:
-        scored = [
-            r for r in scored
-            if _get_price(r.agent, request.capability) <= request.budget
-        ]
+        scored = [r for r in scored if _get_price(r.agent, request.capability) <= request.budget]
 
     log.info(
         "Routed request %s (%s): %d candidates, strategy=%s, winner=%s",

@@ -71,7 +71,7 @@ class TestNexusResponse:
 
     def test_confidence_bounds(self):
         """NexusResponse rejects confidence outside [0.0, 1.0]."""
-        with pytest.raises(Exception):
+        with pytest.raises(ValueError):
             NexusResponse(
                 request_id="req-123",
                 from_agent="p",
@@ -79,7 +79,7 @@ class TestNexusResponse:
                 confidence=1.5,
             )
 
-        with pytest.raises(Exception):
+        with pytest.raises(ValueError):
             NexusResponse(
                 request_id="req-123",
                 from_agent="p",
@@ -118,12 +118,12 @@ class TestAgentCreate:
 
     def test_empty_name_rejected(self):
         """AgentCreate rejects an empty name."""
-        with pytest.raises(Exception):
+        with pytest.raises(ValueError):
             AgentCreate(name="", endpoint="http://localhost:8000")
 
     def test_name_too_long(self):
         """AgentCreate rejects names exceeding 128 characters."""
-        with pytest.raises(Exception):
+        with pytest.raises(ValueError):
             AgentCreate(name="x" * 129, endpoint="http://localhost:8000")
 
     def test_defaults(self):

@@ -10,12 +10,11 @@ Enables enterprise-grade controls:
 from __future__ import annotations
 
 import hashlib
-import json
 import logging
 import uuid
 from datetime import datetime
 
-from nexus.database import get_db, to_json, from_json
+from nexus.database import from_json, get_db, to_json
 
 log = logging.getLogger("nexus.policy")
 
@@ -109,9 +108,14 @@ async def set_agent_locality(
     )
     await db.commit()
 
-    await _audit("locality_set", agent_id=agent_id, details={
-        "region": region, "jurisdiction": jurisdiction,
-    })
+    await _audit(
+        "locality_set",
+        agent_id=agent_id,
+        details={
+            "region": region,
+            "jurisdiction": jurisdiction,
+        },
+    )
 
     return {
         "agent_id": agent_id,
@@ -207,9 +211,15 @@ async def add_compliance_claim(
     )
     await db.commit()
 
-    await _audit("compliance_claim_added", agent_id=agent_id, details={
-        "claim_id": claim_id, "claim_type": claim_type, "attestation": attestation[:16],
-    })
+    await _audit(
+        "compliance_claim_added",
+        agent_id=agent_id,
+        details={
+            "claim_id": claim_id,
+            "claim_type": claim_type,
+            "attestation": attestation[:16],
+        },
+    )
 
     return {
         "claim_id": claim_id,
@@ -243,9 +253,14 @@ async def verify_claim(claim_id: str) -> dict:
     )
     await db.commit()
 
-    await _audit("compliance_claim_verified", agent_id=claim["agent_id"], details={
-        "claim_id": claim_id, "claim_type": claim["claim_type"],
-    })
+    await _audit(
+        "compliance_claim_verified",
+        agent_id=claim["agent_id"],
+        details={
+            "claim_id": claim_id,
+            "claim_type": claim["claim_type"],
+        },
+    )
 
     return {"claim_id": claim_id, "verified": True}
 
@@ -410,9 +425,14 @@ async def add_gateway(
     )
     await db.commit()
 
-    await _audit("gateway_added", details={
-        "config_id": config_id, "name": name, "type": gateway_type,
-    })
+    await _audit(
+        "gateway_added",
+        details={
+            "config_id": config_id,
+            "name": name,
+            "type": gateway_type,
+        },
+    )
 
     return {"config_id": config_id, "name": name, "gateway_type": gateway_type, "endpoint": endpoint}
 

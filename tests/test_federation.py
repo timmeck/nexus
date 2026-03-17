@@ -1,18 +1,21 @@
 """Tests for federation layer."""
 
 import pytest
+
+from nexus.database import close_db, get_db
 from nexus.federation import service as fed
-from nexus.database import get_db, close_db
 
 
 @pytest.fixture(autouse=True)
 async def setup_db(tmp_path):
     import nexus.config as cfg
+
     cfg.DB_PATH = tmp_path / "test.db"
     cfg.DATA_DIR = tmp_path
     db = await get_db()
     # Create main schema
     from nexus.database import SCHEMA
+
     await db.executescript(SCHEMA)
     await fed.ensure_tables()
     await db.commit()

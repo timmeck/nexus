@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Query
 
-from nexus.models.protocol import NexusRequest
+from nexus.models.protocol import NexusRequest  # noqa: TC001 (runtime: FastAPI param)
 from nexus.router import service
 
 router = APIRouter(prefix="/api/router", tags=["router"])

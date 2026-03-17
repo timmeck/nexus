@@ -90,8 +90,7 @@ async def handle_request(request: NexusRequest) -> NexusResponse:
                         "amount": payment["amount"],
                     }
                 else:
-                    log.warning("Payment failed for request %s: %s",
-                               request.request_id[:8], payment.get("error"))
+                    log.warning("Payment failed for request %s: %s", request.request_id[:8], payment.get("error"))
             except Exception as e:
                 log.warning("Payment processing error: %s", e)
 

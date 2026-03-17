@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 import time
 from difflib import SequenceMatcher
@@ -11,7 +10,7 @@ from difflib import SequenceMatcher
 import httpx
 
 from nexus.auth import sign_request
-from nexus.models.protocol import NexusRequest, NexusResponse, ResponseStatus
+from nexus.models.protocol import NexusRequest
 from nexus.models.verification import (
     AgentAnswer,
     VerificationRequest,
@@ -88,7 +87,10 @@ async def verify(request: VerificationRequest) -> VerificationResult:
 
     log.info(
         "Verification complete: %d/%d responded, consensus=%.2f, contradictions=%d",
-        len(successful), len(candidates), consensus_score, len(contradictions),
+        len(successful),
+        len(candidates),
+        consensus_score,
+        len(contradictions),
     )
 
     return VerificationResult(
@@ -220,20 +222,14 @@ def _analyze_consensus(answers: list[AgentAnswer]) -> tuple[float, list[str]]:
             pairs += 1
 
             if sim < 0.3:
-                contradictions.append(
-                    f"{answers[i].agent_name} vs {answers[j].agent_name}: "
-                    f"low similarity ({sim:.1%})"
-                )
+                contradictions.append(f"{answers[i].agent_name} vs {answers[j].agent_name}: low similarity ({sim:.1%})")
 
     avg_similarity = total_similarity / pairs if pairs > 0 else 0.0
 
     # Weight by confidence
     total_confidence = sum(a.confidence for a in answers)
     if total_confidence > 0:
-        weighted_score = sum(
-            a.confidence / total_confidence * avg_similarity
-            for a in answers
-        )
+        weighted_score = sum(a.confidence / total_confidence * avg_similarity for a in answers)
     else:
         weighted_score = avg_similarity
 

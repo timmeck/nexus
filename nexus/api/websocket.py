@@ -36,10 +36,12 @@ async def agent_websocket(websocket: WebSocket, agent_id: str):
                 await _connections[target].send_text(json.dumps(message))
 
             # Broadcast to dashboard
-            await broadcast_to_dashboard({
-                "type": "agent_message",
-                "data": message,
-            })
+            await broadcast_to_dashboard(
+                {
+                    "type": "agent_message",
+                    "data": message,
+                }
+            )
 
     except WebSocketDisconnect:
         _connections.pop(agent_id, None)
@@ -85,11 +87,13 @@ async def broadcast_to_dashboard(message: dict) -> None:
 
 async def notify_event(event_type: str, data: dict) -> None:
     """Notify dashboards of a Nexus event."""
-    await broadcast_to_dashboard({
-        "type": event_type,
-        "data": data,
-        "timestamp": datetime.utcnow().isoformat(),
-    })
+    await broadcast_to_dashboard(
+        {
+            "type": event_type,
+            "data": data,
+            "timestamp": datetime.utcnow().isoformat(),
+        }
+    )
 
 
 def get_connected_agents() -> list[str]:

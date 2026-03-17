@@ -5,9 +5,9 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException
 
 from nexus.models.capability_schema import (
+    SCHEMA_TEMPLATES,
     AgentCapabilitySpec,
     CapabilitySchema,
-    SCHEMA_TEMPLATES,
 )
 from nexus.registry import service as registry
 
@@ -18,10 +18,7 @@ router = APIRouter(prefix="/api/schemas", tags=["schemas"])
 async def list_templates():
     """List all built-in capability schema templates."""
     return {
-        "templates": {
-            name: schema.model_dump()
-            for name, schema in SCHEMA_TEMPLATES.items()
-        },
+        "templates": {name: schema.model_dump() for name, schema in SCHEMA_TEMPLATES.items()},
         "count": len(SCHEMA_TEMPLATES),
     }
 
@@ -47,11 +44,13 @@ async def get_agent_spec(agent_id: str):
         # Use template if available, otherwise build from agent data
         template = SCHEMA_TEMPLATES.get(cap.name)
         if template:
-            schema = template.model_copy(update={
-                "price_per_request": cap.price_per_request,
-                "avg_response_ms": cap.avg_response_ms,
-                "languages": cap.languages,
-            })
+            schema = template.model_copy(
+                update={
+                    "price_per_request": cap.price_per_request,
+                    "avg_response_ms": cap.avg_response_ms,
+                    "languages": cap.languages,
+                }
+            )
         else:
             schema = CapabilitySchema(
                 name=cap.name,
@@ -59,8 +58,10 @@ async def get_agent_spec(agent_id: str):
                 price_per_request=cap.price_per_request,
                 avg_response_ms=cap.avg_response_ms,
                 languages=cap.languages,
-                input_schema=cap.input_schema or {"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]},
-                output_schema=cap.output_schema or {"type": "object", "properties": {"result": {"type": "string"}}, "required": ["result"]},
+                input_schema=cap.input_schema
+                or {"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]},
+                output_schema=cap.output_schema
+                or {"type": "object", "properties": {"result": {"type": "string"}}, "required": ["result"]},
             )
         schemas.append(schema)
 
@@ -100,19 +101,21 @@ async def discover_by_schema(
             elif tag and not template:
                 continue
 
-            results.append({
-                "agent_id": agent.id,
-                "agent_name": agent.name,
-                "agent_endpoint": agent.endpoint,
-                "capability": cap.name,
-                "description": cap.description or (template.description if template else ""),
-                "category": template.category if template else "general",
-                "price": cap.price_per_request,
-                "avg_ms": cap.avg_response_ms,
-                "languages": cap.languages,
-                "trust_score": agent.trust_score,
-                "has_schema": template is not None,
-            })
+            results.append(
+                {
+                    "agent_id": agent.id,
+                    "agent_name": agent.name,
+                    "agent_endpoint": agent.endpoint,
+                    "capability": cap.name,
+                    "description": cap.description or (template.description if template else ""),
+                    "category": template.category if template else "general",
+                    "price": cap.price_per_request,
+                    "avg_ms": cap.avg_response_ms,
+                    "languages": cap.languages,
+                    "trust_score": agent.trust_score,
+                    "has_schema": template is not None,
+                }
+            )
 
     return {"capabilities": results, "count": len(results)}
 

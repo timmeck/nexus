@@ -242,9 +242,7 @@ AGENTS: list[dict[str, Any]] = [
 # ---------------------------------------------------------------------------
 
 
-async def register_agent(
-    client: httpx.AsyncClient, agent: dict[str, Any]
-) -> str | None:
+async def register_agent(client: httpx.AsyncClient, agent: dict[str, Any]) -> str | None:
     """Register a single agent. Returns the agent_id on success, None on failure."""
     url = f"{NEXUS_URL}/api/registry/agents"
     try:
@@ -271,15 +269,11 @@ async def register_all() -> None:
     logger.info("Registering %d existing agents with Nexus at %s", len(AGENTS), NEXUS_URL)
 
     async with httpx.AsyncClient(timeout=15) as client:
-        results = await asyncio.gather(
-            *(register_agent(client, agent) for agent in AGENTS)
-        )
+        results = await asyncio.gather(*(register_agent(client, agent) for agent in AGENTS))
 
     succeeded = sum(1 for r in results if r is not None)
     failed = len(results) - succeeded
-    logger.info(
-        "Registration complete: %d succeeded, %d failed", succeeded, failed
-    )
+    logger.info("Registration complete: %d succeeded, %d failed", succeeded, failed)
     if failed:
         sys.exit(1)
 

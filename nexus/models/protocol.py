@@ -9,14 +9,14 @@ from datetime import datetime
 from pydantic import BaseModel, Field
 
 
-class VerificationMethod(str, enum.Enum):
+class VerificationMethod(enum.StrEnum):
     NONE = "none"
     SELF_REPORTED = "self_reported"
     CROSS_CHECK = "cross_check"  # verify against independent agent
     DETERMINISTIC = "deterministic"  # compare against known answer
 
 
-class ResponseStatus(str, enum.Enum):
+class ResponseStatus(enum.StrEnum):
     PENDING = "pending"
     ACCEPTED = "accepted"
     PROCESSING = "processing"

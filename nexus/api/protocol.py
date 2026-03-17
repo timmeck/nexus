@@ -28,6 +28,7 @@ async def verify_request(request: VerificationRequest):
 
     # Store verification result
     from nexus.database import get_db, to_json
+
     db = await get_db()
     await db.execute(
         """INSERT INTO verifications
@@ -55,7 +56,8 @@ async def verify_request(request: VerificationRequest):
 @router.get("/verifications")
 async def list_verifications(limit: int = 20):
     """Get recent verification results."""
-    from nexus.database import get_db, from_json
+    from nexus.database import from_json, get_db
+
     db = await get_db()
     rows = await db.execute(
         "SELECT * FROM verifications ORDER BY created_at DESC LIMIT ?",
@@ -63,18 +65,20 @@ async def list_verifications(limit: int = 20):
     )
     results = []
     for r in await rows.fetchall():
-        results.append({
-            "verification_id": r["verification_id"],
-            "query": r["query"],
-            "capability": r["capability"],
-            "agents_queried": r["agents_queried"],
-            "agents_responded": r["agents_responded"],
-            "consensus": bool(r["consensus"]),
-            "consensus_score": r["consensus_score"],
-            "best_answer": r["best_answer"],
-            "contradictions": from_json(r["contradictions"]),
-            "created_at": r["created_at"],
-        })
+        results.append(
+            {
+                "verification_id": r["verification_id"],
+                "query": r["query"],
+                "capability": r["capability"],
+                "agents_queried": r["agents_queried"],
+                "agents_responded": r["agents_responded"],
+                "consensus": bool(r["consensus"]),
+                "consensus_score": r["consensus_score"],
+                "best_answer": r["best_answer"],
+                "contradictions": from_json(r["contradictions"]),
+                "created_at": r["created_at"],
+            }
+        )
     return {"verifications": results, "count": len(results)}
 
 

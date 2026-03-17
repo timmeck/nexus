@@ -22,7 +22,7 @@ async def register_agent(payload: AgentCreate):
         data = agent.model_dump(mode="json")
         return data
     except ValueError as e:
-        raise HTTPException(status_code=409, detail=str(e))
+        raise HTTPException(status_code=409, detail=str(e)) from None
 
 
 @router.get("/agents")

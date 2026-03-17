@@ -15,7 +15,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import sys
 from typing import Any
 
 import httpx
@@ -300,6 +299,7 @@ async def check_all_products() -> dict[str, bool]:
 
 # ─── CLI ─────────────────────────────────────────────────────────────────
 
+
 async def main():
     """Check product health and show adapter status."""
     logger.info("Nexus Universal Adapter — checking product connectivity")
@@ -312,7 +312,10 @@ async def main():
         caps = ", ".join(product["capabilities"].keys())
         logger.info(
             "  %-15s %s  %s  [%s]",
-            name, status, product["base_url"], caps,
+            name,
+            status,
+            product["base_url"],
+            caps,
         )
 
     online = sum(1 for v in health.values() if v)

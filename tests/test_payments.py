@@ -3,13 +3,16 @@
 from __future__ import annotations
 
 import pytest
+
 from tests.conftest import create_agent
 
 
 async def _ensure_tables():
     from nexus.federation.service import ensure_tables
+
     await ensure_tables()
     from nexus.payments.service import ensure_tables as ensure_payment_tables
+
     await ensure_payment_tables()
 
 
@@ -35,11 +38,14 @@ async def test_top_up(client, sample_agent_payload):
     agent = await create_agent(client, sample_agent_payload())
     agent_id = agent["id"]
 
-    resp = await client.post(f"/api/payments/wallets/{agent_id}/topup", json={
-        "agent_id": agent_id,
-        "amount": 50.0,
-        "reason": "test top-up",
-    })
+    resp = await client.post(
+        f"/api/payments/wallets/{agent_id}/topup",
+        json={
+            "agent_id": agent_id,
+            "amount": 50.0,
+            "reason": "test top-up",
+        },
+    )
     assert resp.status_code == 200
     data = resp.json()
     assert data["balance"] == 150.0

@@ -178,7 +178,10 @@ async def process_payment(
 
     log.info(
         "Payment: %s -> %s  %.4f credits (request %s)",
-        consumer_id, provider_id, amount, request_id[:8],
+        consumer_id,
+        provider_id,
+        amount,
+        request_id[:8],
     )
 
     return {
@@ -216,7 +219,9 @@ async def get_payment_stats() -> dict:
     wallets = await db.execute("SELECT COUNT(*) as c, COALESCE(SUM(balance), 0) as total FROM wallets")
     w = await wallets.fetchone()
 
-    txs = await db.execute("SELECT COUNT(*) as c, COALESCE(SUM(amount), 0) as vol FROM transactions WHERE tx_type = 'payment'")
+    txs = await db.execute(
+        "SELECT COUNT(*) as c, COALESCE(SUM(amount), 0) as vol FROM transactions WHERE tx_type = 'payment'"
+    )
     t = await txs.fetchone()
 
     return {

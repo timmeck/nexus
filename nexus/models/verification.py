@@ -44,7 +44,5 @@ class VerificationResult(BaseModel):
     )
     best_answer: str = Field("", description="The answer with highest consensus support")
     answers: list[AgentAnswer] = Field(default_factory=list)
-    contradictions: list[str] = Field(
-        default_factory=list, description="Detected contradictions between answers"
-    )
+    contradictions: list[str] = Field(default_factory=list, description="Detected contradictions between answers")
     created_at: datetime = Field(default_factory=datetime.utcnow)

@@ -3,13 +3,16 @@
 from __future__ import annotations
 
 import pytest
+
 from tests.conftest import create_agent
 
 
 async def _ensure_tables():
     from nexus.federation.service import ensure_tables
+
     await ensure_tables()
     from nexus.payments.service import ensure_tables as ensure_payment_tables
+
     await ensure_payment_tables()
 
 
@@ -48,13 +51,15 @@ async def test_agent_spec(client, sample_agent_payload):
     """Should generate a full capability spec for an agent."""
     await _ensure_tables()
     payload = sample_agent_payload(
-        capabilities=[{
-            "name": "text_generation",
-            "description": "Generates text",
-            "price_per_request": 0.05,
-            "avg_response_ms": 1000,
-            "languages": ["en", "de"],
-        }],
+        capabilities=[
+            {
+                "name": "text_generation",
+                "description": "Generates text",
+                "price_per_request": 0.05,
+                "avg_response_ms": 1000,
+                "languages": ["en", "de"],
+            }
+        ],
     )
     agent = await create_agent(client, payload)
 
@@ -72,11 +77,13 @@ async def test_discover_by_schema(client, sample_agent_payload):
     """Should discover capabilities across agents."""
     await _ensure_tables()
     payload = sample_agent_payload(
-        capabilities=[{
-            "name": "text_generation",
-            "description": "Gen text",
-            "languages": ["en"],
-        }],
+        capabilities=[
+            {
+                "name": "text_generation",
+                "description": "Gen text",
+                "languages": ["en"],
+            }
+        ],
     )
     await create_agent(client, payload)
 

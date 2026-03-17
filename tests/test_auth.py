@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import time
 
-import pytest
-
 from nexus.auth import generate_api_key, sign_request, verify_signature
 
 
@@ -32,9 +30,7 @@ class TestHmacSigning:
         assert "X-Nexus-Timestamp" in headers
         assert "X-Nexus-Signature" in headers
 
-        valid = verify_signature(
-            payload, key, headers["X-Nexus-Timestamp"], headers["X-Nexus-Signature"]
-        )
+        valid = verify_signature(payload, key, headers["X-Nexus-Timestamp"], headers["X-Nexus-Signature"])
         assert valid is True
 
     def test_wrong_key_fails(self):
@@ -43,9 +39,7 @@ class TestHmacSigning:
         payload = '{"query": "test"}'
         headers = sign_request(payload, key1)
 
-        valid = verify_signature(
-            payload, key2, headers["X-Nexus-Timestamp"], headers["X-Nexus-Signature"]
-        )
+        valid = verify_signature(payload, key2, headers["X-Nexus-Timestamp"], headers["X-Nexus-Signature"])
         assert valid is False
 
     def test_tampered_payload_fails(self):
@@ -54,8 +48,7 @@ class TestHmacSigning:
         headers = sign_request(payload, key)
 
         valid = verify_signature(
-            '{"query": "tampered"}', key,
-            headers["X-Nexus-Timestamp"], headers["X-Nexus-Signature"]
+            '{"query": "tampered"}', key, headers["X-Nexus-Timestamp"], headers["X-Nexus-Signature"]
         )
         assert valid is False
 
@@ -66,12 +59,15 @@ class TestHmacSigning:
         headers = sign_request(payload, key, timestamp=old_ts)
 
         valid = verify_signature(
-            payload, key, headers["X-Nexus-Timestamp"], headers["X-Nexus-Signature"],
+            payload,
+            key,
+            headers["X-Nexus-Timestamp"],
+            headers["X-Nexus-Signature"],
             max_age_seconds=300,
         )
         assert valid is False
 
     def test_invalid_timestamp_fails(self):
         key = generate_api_key()
-        valid = verify_signature('{}', key, "not-a-number", "somesig")
+        valid = verify_signature("{}", key, "not-a-number", "somesig")
         assert valid is False

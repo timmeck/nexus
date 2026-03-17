@@ -3,17 +3,21 @@
 from __future__ import annotations
 
 import pytest
+
 from tests.conftest import create_agent
 
 
 @pytest.mark.asyncio
 async def test_verify_not_enough_agents(client, sample_agent_payload):
     """Verification should fail gracefully when not enough agents."""
-    resp = await client.post("/api/protocol/verify", json={
-        "query": "What is 2+2?",
-        "capability": "math",
-        "min_agents": 3,
-    })
+    resp = await client.post(
+        "/api/protocol/verify",
+        json={
+            "query": "What is 2+2?",
+            "capability": "math",
+            "min_agents": 3,
+        },
+    )
     assert resp.status_code == 200
     data = resp.json()
     assert data["consensus"] is False
@@ -29,19 +33,24 @@ async def test_verify_with_agents_offline(client, sample_agent_payload):
         payload = sample_agent_payload(
             name=f"math-agent-{i}",
             endpoint=f"http://localhost:{19000 + i}",
-            capabilities=[{
-                "name": "math",
-                "description": "Math operations",
-                "languages": ["en"],
-            }],
+            capabilities=[
+                {
+                    "name": "math",
+                    "description": "Math operations",
+                    "languages": ["en"],
+                }
+            ],
         )
         await create_agent(client, payload)
 
-    resp = await client.post("/api/protocol/verify", json={
-        "query": "What is 2+2?",
-        "capability": "math",
-        "min_agents": 3,
-    })
+    resp = await client.post(
+        "/api/protocol/verify",
+        json={
+            "query": "What is 2+2?",
+            "capability": "math",
+            "min_agents": 3,
+        },
+    )
     assert resp.status_code == 200
     data = resp.json()
     # Agents are not actually running, so all should fail
@@ -55,11 +64,14 @@ async def test_verify_with_agents_offline(client, sample_agent_payload):
 async def test_list_verifications(client):
     """Should be able to list verification history."""
     # First do a verification
-    await client.post("/api/protocol/verify", json={
-        "query": "test query",
-        "capability": "test",
-        "min_agents": 2,
-    })
+    await client.post(
+        "/api/protocol/verify",
+        json={
+            "query": "test query",
+            "capability": "test",
+            "min_agents": 2,
+        },
+    )
 
     resp = await client.get("/api/protocol/verifications")
     assert resp.status_code == 200
@@ -72,11 +84,14 @@ async def test_list_verifications(client):
 @pytest.mark.asyncio
 async def test_verify_stores_result(client):
     """Verification results should be persisted."""
-    await client.post("/api/protocol/verify", json={
-        "query": "stored query",
-        "capability": "test",
-        "min_agents": 2,
-    })
+    await client.post(
+        "/api/protocol/verify",
+        json={
+            "query": "stored query",
+            "capability": "test",
+            "min_agents": 2,
+        },
+    )
 
     resp = await client.get("/api/protocol/verifications")
     data = resp.json()
@@ -87,9 +102,12 @@ async def test_verify_stores_result(client):
 @pytest.mark.asyncio
 async def test_verify_min_agents_validation(client):
     """min_agents must be at least 2."""
-    resp = await client.post("/api/protocol/verify", json={
-        "query": "test",
-        "capability": "test",
-        "min_agents": 1,
-    })
+    resp = await client.post(
+        "/api/protocol/verify",
+        json={
+            "query": "test",
+            "capability": "test",
+            "min_agents": 1,
+        },
+    )
     assert resp.status_code == 422  # Pydantic validation error

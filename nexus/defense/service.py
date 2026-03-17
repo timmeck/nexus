@@ -9,26 +9,27 @@ Protects the Nexus network from:
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import uuid
 from datetime import datetime, timedelta
 from difflib import SequenceMatcher
 
-from nexus.config import TRUST_PENALTY, TRUST_REWARD, MIN_TRUST, MAX_TRUST
-from nexus.database import get_db, to_json, from_json
+from nexus.config import MIN_TRUST
+from nexus.database import get_db, to_json
 
 log = logging.getLogger("nexus.defense")
 
 # ── Config ────────────────────────────────────────────────────────
 
-ESCROW_WINDOW_SECONDS = 60          # How long payments are held
-SLASH_BASE_PENALTY = 0.15           # Base trust slash for bad output
-SLASH_CREDIT_MULTIPLIER = 2.0       # Credit penalty = cost * multiplier
-CHALLENGE_FEE = 0.5                 # Cost to challenge an output
-CHALLENGE_REWARD = 2.0              # Reward if challenge upheld
-SYBIL_MIN_INTERACTIONS = 5          # Min interactions before earning trust
+ESCROW_WINDOW_SECONDS = 60  # How long payments are held
+SLASH_BASE_PENALTY = 0.15  # Base trust slash for bad output
+SLASH_CREDIT_MULTIPLIER = 2.0  # Credit penalty = cost * multiplier
+CHALLENGE_FEE = 0.5  # Cost to challenge an output
+CHALLENGE_REWARD = 2.0  # Reward if challenge upheld
+SYBIL_MIN_INTERACTIONS = 5  # Min interactions before earning trust
 SYBIL_MAX_REGISTRATIONS_PER_HOUR = 10
-SYBIL_SIMILARITY_THRESHOLD = 0.85   # Flag if responses this similar
+SYBIL_SIMILARITY_THRESHOLD = 0.85  # Flag if responses this similar
 
 DEFENSE_SCHEMA = """
 CREATE TABLE IF NOT EXISTS escrow (
@@ -122,6 +123,7 @@ async def slash_agent(
     credits_lost = 0.0
     try:
         from nexus.payments.service import get_wallet
+
         wallet = await get_wallet(agent_id)
         if wallet and wallet["balance"] > 0:
             credits_lost = min(wallet["balance"], SLASH_CREDIT_MULTIPLIER * confidence_gap)
@@ -144,7 +146,11 @@ async def slash_agent(
     await db.commit()
     log.warning(
         "SLASHED agent %s: trust %.2f -> %.2f, credits lost: %.4f (%s)",
-        agent_id, trust_before, trust_after, credits_lost, reason,
+        agent_id,
+        trust_before,
+        trust_after,
+        credits_lost,
+        reason,
     )
 
     return {
@@ -200,8 +206,9 @@ async def create_escrow(
     )
     await db.commit()
 
-    log.info("Escrow %s: %.4f credits held for %ds (request %s)",
-             escrow_id, amount, ESCROW_WINDOW_SECONDS, request_id[:8])
+    log.info(
+        "Escrow %s: %.4f credits held for %ds (request %s)", escrow_id, amount, ESCROW_WINDOW_SECONDS, request_id[:8]
+    )
 
     return {
         "escrow_id": escrow_id,
@@ -268,7 +275,8 @@ async def dispute_escrow(escrow_id: str, reason: str = "") -> dict:
 
     # Slash the provider
     await slash_agent(
-        escrow["provider_id"], escrow["request_id"],
+        escrow["provider_id"],
+        escrow["request_id"],
         reason=f"Escrow disputed: {reason}",
     )
 
@@ -322,6 +330,7 @@ async def create_challenge(
     # Charge challenger the fee
     try:
         from nexus.payments.service import get_balance
+
         balance = await get_balance(challenger_id)
         if balance < CHALLENGE_FEE:
             return {"error": f"Insufficient balance for challenge fee ({CHALLENGE_FEE} credits)"}
@@ -342,8 +351,7 @@ async def create_challenge(
     )
     await db.commit()
 
-    log.info("Challenge %s: %s challenges %s (request %s)",
-             challenge_id, challenger_id, target_id, request_id[:8])
+    log.info("Challenge %s: %s challenges %s (request %s)", challenge_id, challenger_id, target_id, request_id[:8])
 
     return {
         "challenge_id": challenge_id,
@@ -366,19 +374,18 @@ async def resolve_challenge(challenge_id: str, upheld: bool, ruling: str = "") -
     if upheld:
         # Slash the target
         await slash_agent(
-            challenge["target_id"], challenge["request_id"],
+            challenge["target_id"],
+            challenge["request_id"],
             reason=f"Challenge upheld: {ruling}",
         )
 
         # Reward the challenger
         reward_paid = CHALLENGE_REWARD
-        try:
+        with contextlib.suppress(Exception):
             await db.execute(
                 "UPDATE wallets SET balance = balance + ?, updated_at = ? WHERE agent_id = ?",
                 (reward_paid, now, challenge["challenger_id"]),
             )
-        except Exception:
-            pass
 
         status = "upheld"
     else:
@@ -499,12 +506,16 @@ async def detect_sybil_clusters() -> list[dict]:
 
         if len(cluster) >= 2:
             checked.add(a["id"])
-            clusters.append({
-                "agents": [{"id": x["id"], "name": x["name"], "interactions": x["total_interactions"]} for x in cluster],
-                "count": len(cluster),
-                "similarity": "high",
-                "risk": "medium" if len(cluster) < 4 else "high",
-            })
+            clusters.append(
+                {
+                    "agents": [
+                        {"id": x["id"], "name": x["name"], "interactions": x["total_interactions"]} for x in cluster
+                    ],
+                    "count": len(cluster),
+                    "similarity": "high",
+                    "risk": "medium" if len(cluster) < 4 else "high",
+                }
+            )
 
     return clusters
 

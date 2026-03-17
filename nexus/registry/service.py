@@ -10,7 +10,7 @@ import uuid
 from datetime import datetime
 
 from nexus.auth import generate_api_key
-from nexus.database import get_db, to_json, from_json
+from nexus.database import from_json, get_db, to_json
 from nexus.models.agent import Agent, AgentCreate, AgentStatus, AgentUpdate, Capability
 
 log = logging.getLogger("nexus.registry")
@@ -38,8 +38,18 @@ async def register_agent(payload: AgentCreate) -> Agent:
                                trust_score, status, registered_at, last_heartbeat,
                                api_key, auth_enabled)
            VALUES (?, ?, ?, ?, ?, ?, ?, 0.5, 'online', ?, ?, ?, 1)""",
-        (agent_id, payload.name, payload.description, payload.endpoint,
-         caps_json, tags_json, meta_json, now, now, api_key),
+        (
+            agent_id,
+            payload.name,
+            payload.description,
+            payload.endpoint,
+            caps_json,
+            tags_json,
+            meta_json,
+            now,
+            now,
+            api_key,
+        ),
     )
     await db.commit()
     log.info("Registered agent %s (%s) at %s [auth=enabled]", payload.name, agent_id, payload.endpoint)
@@ -47,6 +57,7 @@ async def register_agent(payload: AgentCreate) -> Agent:
     # Auto-create wallet for the new agent
     try:
         from nexus.payments.service import get_or_create_wallet
+
         await get_or_create_wallet(agent_id, payload.name)
     except Exception as e:
         log.warning("Could not create wallet for %s: %s", agent_id, e)
@@ -98,10 +109,7 @@ async def list_agents(
 
     # Post-filter by capability (JSON field, easier in Python)
     if capability:
-        agents = [
-            a for a in agents
-            if any(c.name.lower() == capability.lower() for c in a.capabilities)
-        ]
+        agents = [a for a in agents if any(c.name.lower() == capability.lower() for c in a.capabilities)]
 
     # Post-filter by tag
     if tag:
@@ -185,9 +193,10 @@ async def find_by_capability(
         agents = [a for a in agents if a.trust_score >= min_trust]
     if language:
         agents = [
-            a for a in agents
+            a
+            for a in agents
             if any(
-                language.lower() in [l.lower() for l in c.languages]
+                language.lower() in [lang.lower() for lang in c.languages]
                 for c in a.capabilities
                 if c.name.lower() == capability.lower()
             )
@@ -211,6 +220,6 @@ def _row_to_agent(row) -> Agent:
         last_heartbeat=datetime.fromisoformat(row["last_heartbeat"]) if row["last_heartbeat"] else None,
         total_interactions=row["total_interactions"],
         successful_interactions=row["successful_interactions"],
-        api_key=row["api_key"] if "api_key" in row.keys() else None,
-        auth_enabled=bool(row["auth_enabled"]) if "auth_enabled" in row.keys() else False,
+        api_key=row["api_key"] if "api_key" in row.keys() else None,  # noqa: SIM118
+        auth_enabled=bool(row["auth_enabled"]) if "auth_enabled" in row.keys() else False,  # noqa: SIM118
     )

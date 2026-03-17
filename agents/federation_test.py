@@ -134,7 +134,8 @@ async def run_federation_test():
     logger.info("\n[2/6] Starting secondary Nexus on port %d...", SECONDARY_PORT)
     secondary_process = subprocess.Popen(
         [
-            sys.executable, "-c",
+            sys.executable,
+            "-c",
             f"""
 import os
 os.environ["NEXUS_PORT"] = "{SECONDARY_PORT}"
@@ -174,10 +175,13 @@ uvicorn.run("nexus.main:app", host="0.0.0.0", port={SECONDARY_PORT}, log_level="
         # Step 3: Add secondary as peer to primary
         logger.info("\n[4/6] Adding secondary as peer to primary...")
         async with httpx.AsyncClient(timeout=10) as client:
-            resp = await client.post(f"{PRIMARY_URL}/api/federation/peers", json={
-                "name": "nexus-secondary",
-                "endpoint": SECONDARY_URL,
-            })
+            resp = await client.post(
+                f"{PRIMARY_URL}/api/federation/peers",
+                json={
+                    "name": "nexus-secondary",
+                    "endpoint": SECONDARY_URL,
+                },
+            )
             peer_data = resp.json()
             peer_id = peer_data.get("id")
             logger.info("  Peer added: id=%s", peer_id)
@@ -193,8 +197,11 @@ uvicorn.run("nexus.main:app", host="0.0.0.0", port={SECONDARY_PORT}, log_level="
             remote_agents = resp.json().get("remote_agents", [])
             logger.info("  Remote agents visible on primary: %d", len(remote_agents))
             for ra in remote_agents:
-                logger.info("    - %s (capabilities: %s)", ra["name"],
-                           [c["name"] if isinstance(c, dict) else c for c in ra.get("capabilities", [])])
+                logger.info(
+                    "    - %s (capabilities: %s)",
+                    ra["name"],
+                    [c["name"] if isinstance(c, dict) else c for c in ra.get("capabilities", [])],
+                )
 
             # Step 5: Route request through federation
             logger.info("\n[6/6] Testing cross-instance routing...")
@@ -209,7 +216,7 @@ uvicorn.run("nexus.main:app", host="0.0.0.0", port={SECONDARY_PORT}, log_level="
 
             # Check overall stats
             resp = await client.get(f"{PRIMARY_URL}/api/stats")
-            stats = resp.json()
+            resp.json()
 
         logger.info("\n" + "=" * 60)
         logger.info("  FEDERATION TEST COMPLETE")

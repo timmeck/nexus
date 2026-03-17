@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pytest
+
 from tests.conftest import create_agent
 
 
@@ -52,10 +53,15 @@ async def test_get_agent_hides_api_key(client, sample_agent_payload):
 
 async def _ensure_all_tables():
     """Ensure all extra tables exist for stats tests."""
-    from nexus.federation.service import ensure_tables; await ensure_tables()
-    from nexus.payments.service import ensure_tables as pt; await pt()
-    from nexus.defense.service import ensure_tables as dt; await dt()
-    from nexus.policy.service import ensure_tables as pol; await pol()
+    from nexus.defense.service import ensure_tables as dt
+    from nexus.federation.service import ensure_tables
+    from nexus.payments.service import ensure_tables as pt
+    from nexus.policy.service import ensure_tables as pol
+
+    await ensure_tables()
+    await pt()
+    await dt()
+    await pol()
 
 
 @pytest.mark.asyncio

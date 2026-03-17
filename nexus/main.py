@@ -14,7 +14,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from nexus import __version__
-from nexus.api import protocol, registry, router, trust, websocket, federation, payments, schemas, defense, policy
+from nexus.api import defense, federation, payments, policy, protocol, registry, router, schemas, trust, websocket
 from nexus.config import STATIC_DIR
 from nexus.database import close_db, get_db
 
@@ -35,12 +35,16 @@ async def lifespan(app: FastAPI):
     log.info("=" * 60)
     await get_db()
     from nexus.federation.service import ensure_tables
+
     await ensure_tables()
     from nexus.payments.service import ensure_tables as ensure_payment_tables
+
     await ensure_payment_tables()
     from nexus.defense.service import ensure_tables as ensure_defense_tables
+
     await ensure_defense_tables()
     from nexus.policy.service import ensure_tables as ensure_policy_tables
+
     await ensure_policy_tables()
     yield
     await close_db()
@@ -131,15 +135,19 @@ async def stats():
     consensus_count = (await consensus.fetchone())["c"]
 
     from nexus.federation.service import get_federation_stats
+
     fed_stats = await get_federation_stats()
 
     from nexus.payments.service import get_payment_stats
+
     pay_stats = await get_payment_stats()
 
     from nexus.defense.service import get_defense_stats
+
     def_stats = await get_defense_stats()
 
     from nexus.policy.service import get_policy_stats
+
     pol_stats = await get_policy_stats()
 
     return {

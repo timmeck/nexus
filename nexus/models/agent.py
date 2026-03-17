@@ -8,7 +8,7 @@ from datetime import datetime
 from pydantic import BaseModel, Field
 
 
-class AgentStatus(str, enum.Enum):
+class AgentStatus(enum.StrEnum):
     ONLINE = "online"
     OFFLINE = "offline"
     DEGRADED = "degraded"
