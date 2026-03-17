@@ -1,17 +1,18 @@
 """Protocol Handler — Manages the full request lifecycle through Nexus.
 
-State machine:  RECEIVED → POLICY_CHECKED → ROUTED → BUDGET_CHECKED
-                → ESCROWED → FORWARDED → RESPONSE_RECEIVED
-                → TRUST_RECORDED → SETTLED | DISPUTED | FAILED
+Uses RequestLifecycle for validated state transitions.
+If a transition is not in the allowed graph, it raises InvalidTransitionError.
 
 If it is not enforced in the request lifecycle, it is not part of the protocol.
 """
 
 from __future__ import annotations
 
+import json
 import logging
 import time
 import uuid
+from datetime import UTC, datetime
 
 import httpx
 
@@ -21,6 +22,7 @@ from nexus.models.agent import AgentStatus, AgentUpdate
 from nexus.models.protocol import NexusRequest, NexusResponse, ResponseStatus
 from nexus.payments import service as payments
 from nexus.policy import service as policy
+from nexus.protocol.state_machine import RequestLifecycle, RequestState
 from nexus.registry import service as registry
 from nexus.router import service as router
 from nexus.trust import service as trust
@@ -35,9 +37,10 @@ async def handle_request(request: NexusRequest) -> NexusResponse:
     """Process a NexusRequest through the enforced pipeline.
 
     Every step is audited. Policy, escrow, and trust are not optional sidecars —
-    they sit in the critical path.
+    they sit in the critical path. State transitions are validated.
     """
     start = time.time()
+    lifecycle = RequestLifecycle(request.request_id)
     trail = _new_trail(request)
 
     try:
@@ -48,6 +51,7 @@ async def handle_request(request: NexusRequest) -> NexusResponse:
         trail["policy"] = policy_result
 
         if not policy_result["allowed"]:
+            lifecycle.transition(RequestState.POLICY_REJECTED)
             trail_step(trail, "rejected")
             _cleanup(request.request_id)
             return NexusResponse(
@@ -59,6 +63,8 @@ async def handle_request(request: NexusRequest) -> NexusResponse:
                 meta={"trail": trail},
             )
 
+        lifecycle.transition(RequestState.POLICY_APPROVED)
+
         # ── Step 2: Route (with policy-filtered candidates) ──────
         trail_step(trail, "routing")
 
@@ -68,6 +74,7 @@ async def handle_request(request: NexusRequest) -> NexusResponse:
             allowed_agent_ids=policy_result.get("allowed_agents"),
         )
         if not routes:
+            lifecycle.transition(RequestState.NO_ROUTE)
             trail_step(trail, "no_route")
             _cleanup(request.request_id)
             return NexusResponse(
@@ -82,6 +89,7 @@ async def handle_request(request: NexusRequest) -> NexusResponse:
         best = routes[0]
         trail["routed_to"] = best.agent.id
         trail["route_score"] = best.score
+        lifecycle.transition(RequestState.ROUTED)
 
         # ── Step 3: Budget Pre-Check ─────────────────────────────
         trail_step(trail, "budget_check")
@@ -90,6 +98,7 @@ async def handle_request(request: NexusRequest) -> NexusResponse:
         if estimated_cost > 0:
             can_pay = await payments.check_budget(request.from_agent, estimated_cost)
             if not can_pay:
+                lifecycle.transition(RequestState.FUNDS_INSUFFICIENT)
                 trail_step(trail, "insufficient_funds")
                 _cleanup(request.request_id)
                 balance = await payments.get_balance(request.from_agent)
@@ -102,13 +111,28 @@ async def handle_request(request: NexusRequest) -> NexusResponse:
                     meta={"trail": trail},
                 )
 
+        lifecycle.transition(RequestState.BUDGET_CHECKED)
+
         # ── Step 4: Forward to Agent ─────────────────────────────
         trail_step(trail, "forwarding")
+        lifecycle.transition(RequestState.FORWARDING)
 
         response = await _forward_to_agent(request, best.agent)
         elapsed_ms = int((time.time() - start) * 1000)
         response.processing_ms = elapsed_ms
         success = response.status == ResponseStatus.COMPLETED
+
+        if not success:
+            lifecycle.transition(RequestState.FAILED)
+            trail_step(trail, "provider_failed")
+            response.meta["trail"] = trail
+            _cleanup(request.request_id)
+
+            # Audit the failure
+            await _audit_completion(request, trail, best.agent.id, policy_result, success, elapsed_ms, response)
+            return response
+
+        lifecycle.transition(RequestState.RESPONSE_RECEIVED)
 
         # ── Step 5: Record Interaction & Update Trust ────────────
         trail_step(trail, "trust_recording")
@@ -123,8 +147,10 @@ async def handle_request(request: NexusRequest) -> NexusResponse:
             response_ms=elapsed_ms,
         )
 
-        # ── Step 6: Settlement — Escrow or Direct ────────────────
-        if success and response.cost > 0:
+        lifecycle.transition(RequestState.TRUST_RECORDED)
+
+        # ── Step 6: Settlement — Escrow or Free ──────────────────
+        if response.cost > 0:
             trail_step(trail, "escrow")
 
             try:
@@ -134,6 +160,7 @@ async def handle_request(request: NexusRequest) -> NexusResponse:
                     provider_id=best.agent.id,
                     amount=response.cost,
                 )
+                lifecycle.transition(RequestState.ESCROWED)
                 trail["escrow"] = {
                     "escrow_id": escrow["escrow_id"],
                     "amount": escrow["amount"],
@@ -160,28 +187,15 @@ async def handle_request(request: NexusRequest) -> NexusResponse:
                         }
                 except Exception as pe:
                     log.warning("Payment processing error: %s", pe)
-        elif not success:
-            trail_step(trail, "no_settlement_failed")
-        else:
-            trail_step(trail, "no_settlement_free")
 
-        # ── Step 7: Audit the completed trail ────────────────────
-        trail_step(trail, "completed")
+        # ── Step 7: Mark settled ─────────────────────────────────
+        lifecycle.transition(RequestState.SETTLED)
+        trail_step(trail, "settled")
 
-        await policy.audit_request(
-            request_id=request.request_id,
-            event_type="request_completed",
-            agent_id=best.agent.id,
-            details={
-                "success": success,
-                "elapsed_ms": elapsed_ms,
-                "cost": response.cost,
-                "confidence": response.confidence,
-                "has_escrow": "escrow" in trail,
-                "policy_applied": bool(policy_result.get("policies_applied")),
-            },
-        )
+        await _audit_completion(request, trail, best.agent.id, policy_result, success, elapsed_ms, response)
 
+        trail["final_state"] = lifecycle.state.value
+        trail["transitions"] = len(lifecycle.history)
         response.meta["trail"] = trail
         _cleanup(request.request_id)
         return response
@@ -199,6 +213,34 @@ async def handle_request(request: NexusRequest) -> NexusResponse:
             error=str(e),
             meta={"trail": trail},
         )
+
+
+async def _audit_completion(
+    request: NexusRequest,
+    trail: dict,
+    agent_id: str,
+    policy_result: dict,
+    success: bool,
+    elapsed_ms: int,
+    response: NexusResponse,
+) -> None:
+    """Write audit record for request completion."""
+    try:
+        await policy.audit_request(
+            request_id=request.request_id,
+            event_type="request_completed",
+            agent_id=agent_id,
+            details={
+                "success": success,
+                "elapsed_ms": elapsed_ms,
+                "cost": response.cost,
+                "confidence": response.confidence,
+                "has_escrow": "escrow" in trail,
+                "policy_applied": bool(policy_result.get("policies_applied")),
+            },
+        )
+    except Exception as e:
+        log.warning("Audit write failed: %s", e)
 
 
 async def _forward_to_agent(request: NexusRequest, agent) -> NexusResponse:
@@ -285,10 +327,46 @@ def _new_trail(request: NexusRequest) -> dict:
 
 
 def trail_step(trail: dict, step: str) -> None:
-    """Append a step to the audit trail."""
+    """Append a step to the audit trail and persist to DB."""
+    previous = trail["steps"][-1]["step"] if trail["steps"] else ""
     trail["steps"].append({"step": step, "at": time.time()})
     if (request_id := trail.get("request_id")) and request_id in _active_requests:
         _active_requests[request_id]["status"] = step
+
+    # Fire-and-forget persist
+    import asyncio
+
+    try:
+        loop = asyncio.get_running_loop()
+        _task = loop.create_task(_persist_event(trail["request_id"], step, previous))  # noqa: RUF006
+    except RuntimeError:
+        pass
+
+
+async def _persist_event(request_id: str, step: str, from_state: str = "") -> None:
+    """Write a single audit event to the request_events table (fire-and-forget)."""
+    try:
+        from nexus.database import get_db
+
+        db = await get_db()
+        await db.execute(
+            """INSERT INTO request_events
+               (event_id, request_id, step, from_state, to_state, actor, details, created_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                uuid.uuid4().hex,
+                request_id,
+                step,
+                from_state,
+                step,
+                "system",
+                json.dumps({}),
+                datetime.now(UTC).isoformat(),
+            ),
+        )
+        await db.commit()
+    except Exception:
+        log.debug("Failed to persist event %s for request %s", step, request_id)
 
 
 def _cleanup(request_id: str) -> None:

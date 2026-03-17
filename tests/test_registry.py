@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
 
 import pytest
@@ -145,3 +146,34 @@ async def test_discover(client: AsyncClient, sample_agent_payload):
     assert data["capability"] == "legal_analysis"
     assert data["count"] == 1
     assert data["agents"][0]["name"] == "legal-agent"
+
+
+@pytest.mark.asyncio
+async def test_reaper_marks_stale_agent_offline(client: AsyncClient, sample_agent_payload):
+    """Reaper marks agents with old heartbeats as offline."""
+    from nexus.database import get_db
+    from nexus.registry.reaper import reap_stale_agents
+
+    created = await create_agent(client, sample_agent_payload(name="stale-agent"))
+    agent_id = created["id"]
+
+    # Send a heartbeat so the field is populated
+    await client.post(f"/api/registry/agents/{agent_id}/heartbeat")
+
+    # Set heartbeat far in the past (beyond HEARTBEAT_TIMEOUT)
+    db = await get_db()
+    old_time = (datetime.utcnow() - timedelta(seconds=300)).isoformat()
+    await db.execute(
+        "UPDATE agents SET last_heartbeat = ? WHERE id = ?",
+        (old_time, agent_id),
+    )
+    await db.commit()
+
+    # Run one reaper pass
+    reaped = await reap_stale_agents()
+    assert reaped >= 1
+
+    # Verify agent is now offline
+    resp = await client.get(f"/api/registry/agents/{agent_id}")
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "offline"

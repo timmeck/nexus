@@ -5,6 +5,7 @@ Main FastAPI application entry point.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from contextlib import asynccontextmanager
 
@@ -46,7 +47,12 @@ async def lifespan(app: FastAPI):
     from nexus.policy.service import ensure_tables as ensure_policy_tables
 
     await ensure_policy_tables()
+    from nexus.registry.reaper import reaper_loop
+
+    reaper_task = asyncio.create_task(reaper_loop())
+    log.info("Liveness reaper started.")
     yield
+    reaper_task.cancel()
     await close_db()
     log.info("Nexus shut down.")
 

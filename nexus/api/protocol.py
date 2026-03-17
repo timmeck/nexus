@@ -82,6 +82,33 @@ async def list_verifications(limit: int = 20):
     return {"verifications": results, "count": len(results)}
 
 
+@router.get("/requests/{request_id}/events")
+async def get_request_events(request_id: str):
+    """Get persistent audit trail for a request."""
+    from nexus.database import get_db
+
+    db = await get_db()
+    rows = await db.execute(
+        "SELECT * FROM request_events WHERE request_id = ? ORDER BY created_at",
+        (request_id,),
+    )
+    events = []
+    for r in await rows.fetchall():
+        events.append(
+            {
+                "event_id": r["event_id"],
+                "request_id": r["request_id"],
+                "step": r["step"],
+                "from_state": r["from_state"],
+                "to_state": r["to_state"],
+                "actor": r["actor"],
+                "details": r["details"],
+                "created_at": r["created_at"],
+            }
+        )
+    return {"events": events, "count": len(events)}
+
+
 @router.get("/active")
 async def active_requests():
     """Get currently active (in-flight) requests."""

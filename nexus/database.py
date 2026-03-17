@@ -61,6 +61,18 @@ CREATE TABLE IF NOT EXISTS verifications (
     contradictions  TEXT DEFAULT '[]',
     created_at      TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS request_events (
+    event_id     TEXT PRIMARY KEY,
+    request_id   TEXT NOT NULL,
+    step         TEXT NOT NULL,
+    from_state   TEXT DEFAULT '',
+    to_state     TEXT DEFAULT '',
+    actor        TEXT DEFAULT 'system',
+    details      TEXT DEFAULT '{}',
+    created_at   TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_request_events_request ON request_events(request_id);
 """
 
 

@@ -345,3 +345,34 @@ async def test_direct_routing_respects_policy(client: AsyncClient):
     data = resp.json()
     # Should fail — US agent blocked by EU policy
     assert data["status"] in ("rejected", "failed")
+
+
+# ── Test: Persistent audit trail events ──────────────────────
+
+
+@pytest.mark.asyncio
+async def test_request_events_persisted_to_db(client: AsyncClient):
+    """Events should be persisted in request_events table after a request."""
+    import asyncio
+
+    payload = {
+        "from_agent": "consumer-1",
+        "query": "What is AI?",
+        "capability": "general",
+    }
+    resp = await client.post("/api/protocol/request", json=payload)
+    assert resp.status_code == 200
+    data = resp.json()
+    request_id = data["request_id"]
+
+    # Allow fire-and-forget tasks to complete
+    await asyncio.sleep(0.1)
+
+    # Fetch persisted events
+    resp2 = await client.get(f"/api/protocol/requests/{request_id}/events")
+    assert resp2.status_code == 200
+    events_data = resp2.json()
+    assert events_data["count"] >= 1
+
+    steps = [e["step"] for e in events_data["events"]]
+    assert "received" in steps
