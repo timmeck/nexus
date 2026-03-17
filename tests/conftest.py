@@ -31,6 +31,20 @@ async def _isolate_db(tmp_path, monkeypatch):
     monkeypatch.setattr("nexus.database.DB_PATH", db_file)
     monkeypatch.setattr("nexus.database.DATA_DIR", tmp_path)
 
+    # Ensure all tables exist (normally done by app lifespan)
+    from nexus.database import get_db
+
+    await get_db()  # creates core schema
+    from nexus.defense.service import ensure_tables as defense_tables
+    from nexus.federation.service import ensure_tables as federation_tables
+    from nexus.payments.service import ensure_tables as payments_tables
+    from nexus.policy.service import ensure_tables as policy_tables
+
+    await payments_tables()
+    await federation_tables()
+    await defense_tables()
+    await policy_tables()
+
     yield
 
     # Properly close the connection so aiosqlite threads don't leak.

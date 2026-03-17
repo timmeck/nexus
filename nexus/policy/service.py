@@ -86,6 +86,126 @@ async def ensure_tables():
     await db.commit()
 
 
+# ── Request-Level Policy Evaluation (Admission Control) ──────────
+
+
+async def evaluate_request(request) -> dict:
+    """Evaluate a request against all active routing policies.
+
+    This is the central policy gate — called BEFORE routing.
+    Returns {"allowed": bool, "reasons": [...], "allowed_agents": [...] | None, "policies_applied": [...]}.
+    """
+    from nexus.registry import service as registry_svc
+
+    # Ensure policy tables exist (they may not if lifespan hasn't run)
+    try:
+        policies = await list_policies(enabled_only=True)
+    except Exception:
+        await ensure_tables()
+        policies = await list_policies(enabled_only=True)
+
+    # If no policies exist, allow everything (open system)
+    if not policies:
+        return {
+            "allowed": True,
+            "reasons": [],
+            "allowed_agents": None,
+            "policies_applied": [],
+        }
+
+    # Get all online agent IDs to filter against
+    all_agents = await registry_svc.list_agents(status=registry_svc.AgentStatus.ONLINE)
+    if not all_agents:
+        return {
+            "allowed": True,
+            "reasons": ["no agents registered"],
+            "allowed_agents": None,
+            "policies_applied": [],
+        }
+
+    candidate_ids = [a.id for a in all_agents]
+    reasons = []
+    policies_applied = []
+
+    for pol in policies:
+        rules = pol["rules"]
+        if not rules:
+            continue
+
+        before_count = len(candidate_ids)
+
+        # Locality filtering
+        if rules.get("require_region") or rules.get("require_jurisdiction") or rules.get("require_country"):
+            candidate_ids = await filter_agents_by_locality(
+                candidate_ids,
+                required_region=rules.get("require_region"),
+                required_jurisdiction=rules.get("require_jurisdiction"),
+                required_country=rules.get("require_country"),
+            )
+
+        # Compliance filtering
+        if rules.get("require_compliance"):
+            candidate_ids = await filter_agents_by_compliance(
+                candidate_ids,
+                required_claims=rules["require_compliance"],
+            )
+
+        # Min trust filtering
+        if rules.get("min_trust") is not None:
+            min_trust = rules["min_trust"]
+            # Re-filter agents by trust score
+            db = await get_db()
+            if candidate_ids:
+                placeholders = ",".join("?" * len(candidate_ids))
+                rows = await db.execute(
+                    f"SELECT id FROM agents WHERE id IN ({placeholders}) AND trust_score >= ?",
+                    (*candidate_ids, min_trust),
+                )
+                candidate_ids = [r["id"] for r in await rows.fetchall()]
+
+        after_count = len(candidate_ids)
+        if after_count < before_count:
+            filtered = before_count - after_count
+            reasons.append(f"Policy '{pol['name']}' filtered {filtered} agents")
+            policies_applied.append(pol["name"])
+
+    # Budget constraint from request
+    budget = getattr(request, "budget", None)
+    if budget is not None:
+        reasons.append(f"Budget constraint: max {budget} credits")
+
+    # If all candidates filtered out, block the request
+    if not candidate_ids and all_agents:
+        return {
+            "allowed": False,
+            "reasons": reasons or ["All agents filtered by active policies"],
+            "allowed_agents": [],
+            "policies_applied": policies_applied,
+        }
+
+    return {
+        "allowed": True,
+        "reasons": reasons,
+        "allowed_agents": candidate_ids if policies_applied else None,
+        "policies_applied": policies_applied,
+    }
+
+
+async def audit_request(
+    request_id: str,
+    event_type: str,
+    agent_id: str | None = None,
+    details: dict | None = None,
+) -> None:
+    """Record a request-level audit event. Thin wrapper over _audit for handler use."""
+    await _audit(
+        event_type=event_type,
+        agent_id=agent_id,
+        request_id=request_id,
+        details=details,
+    )
+
+
 # ── Feature 11: Data Locality ─────────────────────────────────────
 
 

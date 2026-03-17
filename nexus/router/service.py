@@ -32,6 +32,7 @@ class RouteResult:
 async def route(
     request: NexusRequest,
     strategy: str = "best",
+    allowed_agent_ids: list[str] | None = None,
 ) -> list[RouteResult]:
     """Find the best agent(s) for a request.
 
@@ -40,10 +41,17 @@ async def route(
         cheapest — lowest price first
         fastest  — lowest response time first
         trusted  — highest trust score first
+
+    If allowed_agent_ids is provided, only those agents are considered
+    (pre-filtered by the policy layer).
     """
     if request.to_agent:
         agent = await registry.get_agent(request.to_agent)
         if agent:
+            # Policy still applies: if direct target is not in allowed set, reject
+            if allowed_agent_ids is not None and agent.id not in allowed_agent_ids:
+                log.warning("Direct target %s blocked by policy", agent.id)
+                return []
             return [RouteResult(agent, 1.0, "direct routing")]
         return []
 
@@ -59,6 +67,13 @@ async def route(
 
     if not candidates:
         return []
+
+    # Apply policy filter if provided
+    if allowed_agent_ids is not None:
+        allowed_set = set(allowed_agent_ids)
+        candidates = [c for c in candidates if c.id in allowed_set]
+        if not candidates:
+            return []
 
     # Score and rank candidates
     scored = [_score_agent(agent, request, strategy) for agent in candidates]

@@ -189,6 +189,7 @@ async def create_escrow(
     amount: float,
 ) -> dict:
     """Hold payment in escrow instead of immediate settlement."""
+    await ensure_tables()
     db = await get_db()
     escrow_id = uuid.uuid4().hex[:12]
     now = datetime.utcnow()
