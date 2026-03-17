@@ -81,3 +81,24 @@ async def test_record_and_report(client: AsyncClient, sample_agent_payload):
     assert resp2.status_code == 200
     history = resp2.json()
     assert len(history) == 2
+
+    # Verify trust ledger — append-only delta log
+    resp3 = await client.get(f"/api/trust/ledger/{agent_id}")
+    assert resp3.status_code == 200
+    ledger = resp3.json()
+    assert len(ledger) == 2
+
+    # Most recent entry first (DESC order)
+    latest = ledger[0]
+    assert latest["agent_id"] == agent_id
+    assert latest["reason"] == "failure"
+    assert latest["delta"] < 0
+    assert "trust_before" in latest
+    assert "trust_after" in latest
+    assert latest["request_id"] == "req-002"
+
+    # Older entry
+    first = ledger[1]
+    assert first["reason"] == "success"
+    assert first["delta"] > 0
+    assert first["request_id"] == "req-001"

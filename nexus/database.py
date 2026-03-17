@@ -62,6 +62,18 @@ CREATE TABLE IF NOT EXISTS verifications (
     created_at      TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS trust_ledger (
+    entry_id     TEXT PRIMARY KEY,
+    agent_id     TEXT NOT NULL,
+    request_id   TEXT NOT NULL,
+    delta        REAL NOT NULL,
+    reason       TEXT NOT NULL,
+    trust_before REAL NOT NULL,
+    trust_after  REAL NOT NULL,
+    created_at   TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_trust_ledger_agent ON trust_ledger(agent_id);
+
 CREATE TABLE IF NOT EXISTS request_events (
     event_id     TEXT PRIMARY KEY,
     request_id   TEXT NOT NULL,

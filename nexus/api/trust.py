@@ -25,3 +25,16 @@ async def interaction_history(
 ):
     """Get interaction history for an agent."""
     return await service.get_interaction_history(agent_id, limit=limit)
+
+
+@router.get("/ledger/{agent_id}")
+async def trust_ledger(
+    agent_id: str,
+    limit: int = Query(50, ge=1, le=200),
+):
+    """Get append-only trust ledger for an agent.
+
+    Shows every trust delta with reason, before/after scores, and request reference.
+    This is the truth — not just a current score.
+    """
+    return await service.get_trust_ledger(agent_id, limit=limit)

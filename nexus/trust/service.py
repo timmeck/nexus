@@ -67,6 +67,11 @@ async def record_interaction(
     if verified and success and confidence > 0.8:
         delta += TRUST_REWARD * 0.5
 
+    # Get trust before update
+    row = await db.execute("SELECT trust_score FROM agents WHERE id = ?", (provider_id,))
+    agent_row = await row.fetchone()
+    trust_before = agent_row["trust_score"] if agent_row else 0.5
+
     await db.execute(
         """UPDATE agents
            SET trust_score = MAX(?, MIN(?, trust_score + ?))
@@ -74,12 +79,28 @@ async def record_interaction(
         (MIN_TRUST, MAX_TRUST, delta, provider_id),
     )
 
+    trust_after = max(MIN_TRUST, min(MAX_TRUST, trust_before + delta))
+
+    # Record in trust ledger (append-only)
+    reason = "success" if success else "failure"
+    if verified and success and confidence > 0.8:
+        reason = "verified_success"
+    ledger_id = uuid.uuid4().hex[:12]
+    await db.execute(
+        """INSERT INTO trust_ledger
+           (entry_id, agent_id, request_id, delta, reason, trust_before, trust_after, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+        (ledger_id, provider_id, request_id, delta, reason, trust_before, trust_after, now),
+    )
+
     await db.commit()
     log.info(
-        "Interaction %s: provider=%s success=%s trust_delta=%.3f",
+        "Interaction %s: provider=%s success=%s trust %.3f → %.3f (Δ%.3f)",
         interaction_id,
         provider_id,
         success,
+        trust_before,
+        trust_after,
         delta,
     )
 
@@ -135,6 +156,16 @@ async def get_trust_report(agent_id: str) -> TrustReport | None:
         avg_response_ms=stats["avg_ms"],
         total_earned=stats["total_cost"],
     )
+
+
+async def get_trust_ledger(agent_id: str, limit: int = 50) -> list[dict]:
+    """Get append-only trust ledger for an agent."""
+    db = await get_db()
+    rows = await db.execute(
+        "SELECT * FROM trust_ledger WHERE agent_id = ? ORDER BY created_at DESC LIMIT ?",
+        (agent_id, limit),
+    )
+    return [dict(r) for r in await rows.fetchall()]
 
 
 async def get_interaction_history(
