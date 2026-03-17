@@ -1,87 +1,68 @@
 # Nexus
 
-**AI-to-AI Protocol Layer** | Discovery | Trust | Protocol | Routing
+**AI-to-AI Protocol Layer** | 9 Layers | 15 Features | 91 Tests
 
+[![CI](https://github.com/timmeck/nexus/actions/workflows/ci.yml/badge.svg)](https://github.com/timmeck/nexus/actions/workflows/ci.yml)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/downloads/)
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688.svg)](https://fastapi.tiangolo.com)
 [![License: MIT](https://img.shields.io/badge/license-MIT-gold.svg)](LICENSE)
 
 ---
 
-Nexus is a standardized protocol layer that enables autonomous AI agents to **discover**, **negotiate with**, and **communicate** with each other. It provides the infrastructure that turns isolated agents into an interoperable network.
+Nexus is a self-hosted protocol that enables AI agents to **discover**, **negotiate**, **transact**, and **verify** each other — without human intervention. Discovery + Trust + Routing + Payments + Federation + Adversarial Defense + Enterprise Compliance in one working system.
 
-Think of it as DNS + HTTP + a reputation system, but for AI agents.
+Think DNS + HTTPS + Payment Rails + Certificate Authority, but for AI agents.
 
-## The Problem
+![Nexus Dashboard](docs/dashboard.png)
 
-Every AI agent speaks its own language. Agent A can't find Agent B, doesn't know what B offers, has no reason to trust B's output, and no standard way to send a request. Nexus solves all four problems.
+## The 9 Layers
 
-## Architecture
+| Layer | What it does |
+|-------|-------------|
+| **Discovery** | Agent registry, capability search, heartbeat monitoring |
+| **Trust** | Reputation scoring, interaction tracking, trust reports |
+| **Protocol** | Standardized NexusRequest/NexusResponse format |
+| **Routing** | Best, cheapest, fastest, or most trusted agent matching |
+| **Federation** | Multiple Nexus instances sync agent registries across networks |
+| **Payments** | Credit wallets, pay-per-request, transaction history |
+| **Schemas** | Formal capability definitions (like OpenAPI for agent skills) |
+| **Defense** | Slashing, escrow, challenge mechanism, sybil detection |
+| **Policy** | Data locality (GDPR), compliance claims, edge gateway integration |
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                        NEXUS CORE                           │
-│                                                             │
-│  ┌─────────────┐  ┌─────────────┐  ┌──────────────────┐   │
-│  │  Discovery   │  │    Trust    │  │     Protocol     │   │
-│  │   Layer      │  │    Layer    │  │      Layer       │   │
-│  │             │  │             │  │                  │   │
-│  │ • Registry   │  │ • Scoring   │  │ • NexusRequest   │   │
-│  │ • Search     │  │ • Tracking  │  │ • NexusResponse  │   │
-│  │ • Heartbeat  │  │ • Reports   │  │ • Negotiation    │   │
-│  └──────┬──────┘  └──────┬──────┘  └────────┬─────────┘   │
-│         │                │                   │              │
-│         └────────────────┼───────────────────┘              │
-│                          │                                  │
-│                  ┌───────┴───────┐                          │
-│                  │    Routing    │                          │
-│                  │    Layer      │                          │
-│                  │               │                          │
-│                  │ • best        │                          │
-│                  │ • cheapest    │                          │
-│                  │ • fastest     │                          │
-│                  │ • trusted     │                          │
-│                  └───────────────┘                          │
-│                                                             │
-│  ┌─────────────────────────────────────────────────────┐   │
-│  │              WebSocket Real-Time Bus                 │   │
-│  └─────────────────────────────────────────────────────┘   │
-└──────────────────────────┬──────────────────────────────────┘
-                           │
-            ┌──────────────┼──────────────┐
-            ▼              ▼              ▼
-        ┌───────┐     ┌───────┐     ┌───────┐
-        │Agent A│     │Agent B│     │Agent C│
-        └───────┘     └───────┘     └───────┘
-```
+## 15 Features
 
-### The Four Layers
-
-| Layer | Purpose | Key Feature |
-|-------|---------|-------------|
-| **Discovery** | Agent registry and capability search | Agents register themselves, others find them by capability |
-| **Trust** | Reputation scoring and interaction tracking | Every interaction updates trust scores automatically |
-| **Protocol** | Standardized request/response messages | `NexusRequest` in, `NexusResponse` out, always |
-| **Routing** | Intelligent agent matching | Four strategies: best, cheapest, fastest, trusted |
+| # | Feature | Description |
+|---|---------|-------------|
+| 1 | **Agent Registration** | Register agents with capabilities, pricing, SLA |
+| 2 | **Auth per Agent** | API keys + HMAC signing per agent |
+| 3 | **Multi-Agent Verification** | Ask 3+ agents, compare answers, score consensus |
+| 4 | **Federation** | Peer discovery, agent sync, cross-instance routing |
+| 5 | **Micropayments** | Credit wallets, pay-per-request, budgets |
+| 6 | **Capability Schema** | Formal skill definitions with JSON Schema |
+| 7 | **Slashing Penalties** | Trust + credit loss for bad outputs |
+| 8 | **Escrow Settlement** | Delayed payment with dispute window |
+| 9 | **Challenge Mechanism** | Agents can dispute others' outputs |
+| 10 | **Sybil Detection** | Rate limiting, similarity flagging, trust farming prevention |
+| 11 | **Data Locality** | Region/jurisdiction tagging, GDPR routing |
+| 12 | **Compliance Claims** | SHA-256 attestation, 10 claim types |
+| 13 | **Edge Gateways** | Kong/Tyk/DreamFactory integration configs |
+| 14 | **Architecture Docs** | Topology diagrams with failure scenarios |
+| 15 | **Protocol Spec** | RFC-style formal specification |
 
 ## Quick Start
 
 ```bash
-# Clone and install
 git clone https://github.com/timmeck/nexus.git
 cd nexus
-python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 
 # Start Nexus
 python run.py
+
+# Open dashboard: http://localhost:9500
+# API docs: http://localhost:9500/docs
 ```
 
-Nexus is now running at `http://localhost:9500`. Open the dashboard or hit `/docs` for the interactive API.
-
-![Nexus Dashboard](docs/dashboard.png)
-
-### Register Your First Agent
+### Register an Agent
 
 ```bash
 curl -X POST http://localhost:9500/api/registry/agents \
@@ -93,13 +74,16 @@ curl -X POST http://localhost:9500/api/registry/agents \
       {
         "name": "summarization",
         "description": "Summarizes text documents",
+        "price_per_request": 0.01,
+        "avg_response_ms": 2000,
         "languages": ["en", "de"]
       }
-    ]
+    ],
+    "tags": ["nlp", "text"]
   }'
 ```
 
-### Send a Request Through Nexus
+### Send a Request
 
 ```bash
 curl -X POST http://localhost:9500/api/protocol/request \
@@ -107,170 +91,224 @@ curl -X POST http://localhost:9500/api/protocol/request \
   -d '{
     "from_agent": "consumer-001",
     "query": "Summarize the latest research on LLM agents",
-    "capability": "summarization"
+    "capability": "summarization",
+    "budget": 0.05
   }'
 ```
 
-Nexus finds the best-matching agent, forwards the request, tracks the interaction, and updates trust scores.
+Nexus finds the best agent, forwards the request, holds payment in escrow, verifies the response, updates trust scores, and releases payment.
+
+### Register All 8 Products
+
+```bash
+python agents/register_existing.py
+```
+
+Registers Cortex, DocBrain, Mnemonic, DeepResearch, Sentinel, CostControl, SafetyProxy, and LogAnalyst.
+
+## Connected Products
+
+| Agent | Port | Capabilities |
+|-------|------|-------------|
+| **Cortex** | 8100 | text_generation, code_analysis |
+| **DocBrain** | 8200 | document_analysis, knowledge_retrieval |
+| **Mnemonic** | 8300 | memory_management, context_tracking |
+| **DeepResearch** | 8400 | deep_research, fact_checking |
+| **Sentinel** | 8500 | security_analysis, threat_detection |
+| **CostControl** | 8600 | cost_tracking, budget_management |
+| **SafetyProxy** | 8700 | prompt_injection_detection, pii_detection |
+| **LogAnalyst** | 8800 | log_analysis, error_explanation |
+
+All products expose a `/nexus/handle` endpoint for direct protocol communication.
+
+## How It Works
+
+```
+Consumer Agent                    Nexus                     Provider Agent
+      |                            |                            |
+      |-- "I need text_analysis" ->|                            |
+      |                            |-- finds best agent ------->|
+      |                            |-- checks compliance ------->|
+      |                            |-- creates escrow ---------->|
+      |                            |-- forwards request -------->|
+      |                            |<--- response + confidence --|
+      |                            |-- verifies (optional) ----->|
+      |                            |-- releases payment -------->|
+      |<-- result + sources -------|                            |
+      |                            |-- updates trust score ----->|
+```
+
+## Adversarial Defense
+
+| Mechanism | How it works |
+|-----------|-------------|
+| **Slashing** | Agents claiming high confidence but delivering bad output lose trust AND credits |
+| **Escrow** | Payment held during settlement window, consumer can dispute |
+| **Challenge** | Any agent can dispute another's output for a small fee; independent verification |
+| **Sybil Detection** | Rate-limited registration, similarity flagging, trust farming prevention |
+
+## Enterprise Policy
+
+| Policy | What it enforces |
+|--------|-----------------|
+| **Data Locality** | Route only to agents in specific regions (EU, US, etc.) |
+| **Compliance Claims** | SHA-256 signed attestations (GDPR, SOC2, HIPAA, etc.) |
+| **Edge Gateways** | Pre-built configs for Kong, Tyk, DreamFactory |
 
 ## API Reference
 
 ### Registry
-
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `POST` | `/api/registry/agents` | Register a new agent |
-| `GET` | `/api/registry/agents` | List agents (filter by status, capability, tag) |
-| `GET` | `/api/registry/agents/{id}` | Get agent details |
+| `POST` | `/api/registry/agents` | Register agent |
+| `GET` | `/api/registry/agents` | List agents |
+| `GET` | `/api/registry/agents/{id}` | Get agent |
 | `PATCH` | `/api/registry/agents/{id}` | Update agent |
-| `DELETE` | `/api/registry/agents/{id}` | Unregister agent |
-| `POST` | `/api/registry/agents/{id}/heartbeat` | Send heartbeat |
-| `GET` | `/api/registry/discover?capability=...` | Discover agents by capability |
+| `DELETE` | `/api/registry/agents/{id}` | Unregister |
+| `POST` | `/api/registry/agents/{id}/heartbeat` | Heartbeat |
+| `GET` | `/api/registry/discover` | Find by capability |
 
 ### Protocol
-
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `POST` | `/api/protocol/request` | Submit a NexusRequest |
-| `GET` | `/api/protocol/active` | List in-flight requests |
+| `POST` | `/api/protocol/request` | Submit request |
+| `POST` | `/api/protocol/verify` | Multi-agent verification |
+| `GET` | `/api/protocol/active` | Active requests |
 
-### Router
-
+### Trust & Defense
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `POST` | `/api/router/route?strategy=best` | Find matching agents without executing |
+| `GET` | `/api/trust/report/{id}` | Trust report |
+| `GET` | `/api/trust/history/{id}` | Interaction history |
+| `POST` | `/api/defense/slash/{id}` | Slash agent |
+| `POST` | `/api/defense/challenge` | Challenge response |
+| `GET` | `/api/defense/escrow` | List escrows |
+| `POST` | `/api/defense/dispute/{id}` | Dispute escrow |
+| `GET` | `/api/defense/sybil-report` | Sybil analysis |
 
-### Trust
-
+### Federation
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `GET` | `/api/trust/report/{agent_id}` | Get trust report |
-| `GET` | `/api/trust/history/{agent_id}` | Get interaction history |
+| `GET` | `/api/federation/peers` | List peers |
+| `POST` | `/api/federation/peers` | Add peer |
+| `POST` | `/api/federation/sync/{id}` | Sync with peer |
+| `GET` | `/api/federation/agents` | Remote agents |
+
+### Payments
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api/payments/wallets` | List wallets |
+| `POST` | `/api/payments/deposit` | Add credits |
+| `GET` | `/api/payments/transactions` | Transaction history |
+
+### Policy
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/api/policy/locality` | Set data locality |
+| `POST` | `/api/policy/compliance` | Submit compliance claim |
+| `GET` | `/api/policy/compliance/{id}` | Verify claim |
+| `POST` | `/api/policy/gateway` | Register edge gateway |
 
 ### System
-
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | `GET` | `/health` | Health check |
-| `GET` | `/api/stats` | Network statistics |
-| `WS` | `/ws/agent/{agent_id}` | Real-time agent WebSocket |
-| `WS` | `/ws/dashboard` | Real-time dashboard updates |
+| `GET` | `/api/stats` | Full network stats |
+| `WS` | `/ws/agent/{id}` | Agent WebSocket |
+| `WS` | `/ws/dashboard` | Dashboard WebSocket |
 
-## Protocol Specification
+## Comparison
+
+| Feature | Nexus | Google A2A | MCP |
+|---------|-------|------------|-----|
+| Agent discovery | Registry + capability search | DNS-based | Not included |
+| Trust scoring | Automatic per-interaction | Not included | Not included |
+| Routing | 4 strategies | Client-side | N/A |
+| Payments | Built-in credit system | Not included | Not included |
+| Federation | Peer sync + remote routing | Not included | Not included |
+| Adversarial defense | Slashing, escrow, challenges, sybil | Not included | Not included |
+| Enterprise compliance | GDPR, SOC2, attestations | Planned | Not included |
+| Verification | Multi-agent cross-check | Not included | Not included |
+| Status | **Working implementation** | Spec only | Working (tools only) |
+
+## Protocol Spec
 
 ### NexusRequest
-
 ```json
 {
-  "request_id": "auto-generated UUID",
-  "from_agent": "agent-id",
-  "to_agent": "target-id or null (router decides)",
-  "query": "The actual question or task",
-  "capability": "required capability name",
-  "constraints": {},
-  "budget": 10.0,
+  "request_id": "auto-generated",
+  "from_agent": "consumer-id",
+  "to_agent": null,
+  "query": "The actual question",
+  "capability": "required capability",
+  "constraints": {"region": "eu"},
+  "budget": 0.05,
   "deadline_ms": 5000,
-  "verification": "none | self_reported | cross_check | deterministic",
-  "language": "en",
-  "context": {}
+  "verification": "cross_check",
+  "language": "en"
 }
 ```
 
 ### NexusResponse
-
 ```json
 {
-  "response_id": "auto-generated UUID",
-  "request_id": "matching request ID",
-  "from_agent": "responder-id",
-  "to_agent": "requester-id",
-  "status": "completed | failed | rejected | timeout",
-  "answer": "The actual response content",
+  "response_id": "auto-generated",
+  "request_id": "matching request",
+  "from_agent": "provider-id",
+  "status": "completed",
+  "answer": "The response",
   "confidence": 0.92,
-  "sources": ["source1", "source2"],
-  "cost": 1.5,
-  "processing_ms": 340,
-  "error": null,
-  "meta": {}
+  "sources": ["source1"],
+  "cost": 0.02,
+  "processing_ms": 340
 }
 ```
 
 ## Demo
 
-Nexus ships with demo agents to show the protocol in action:
-
 ```bash
-# Terminal 1 — Nexus core
+# Terminal 1: Nexus
 python run.py
 
-# Terminal 2 — Provider agent (port 9501)
+# Terminal 2: Provider agent
 python agents/provider.py
 
-# Terminal 3 — Consumer agent (port 9502)
+# Terminal 3: Consumer agent
 python agents/consumer.py
 
-# Optional — Register existing agents (Cortex, DocBrain, etc.)
+# Register all 8 products
 python agents/register_existing.py
 ```
-
-The provider registers its capabilities with Nexus. The consumer discovers the provider through Nexus and sends requests through the protocol layer. Trust scores update in real time.
 
 ## Docker
 
 ```bash
-# Run the full stack
 docker compose up -d
-
-# View logs
-docker compose logs -f nexus
-
-# Shut down
-docker compose down
 ```
 
-This starts Nexus on port 9500, the demo provider on 9501, and the demo consumer on 9502.
+## Testing
 
-## Comparison
-
-| Feature | Nexus | Google A2A | Anthropic MCP |
-|---------|-------|------------|---------------|
-| Agent discovery | Built-in registry + capability search | DNS-based | Not included |
-| Trust scoring | Automatic, per-interaction | Not included | Not included |
-| Routing strategies | 4 strategies (best/cheapest/fastest/trusted) | Client-side | N/A |
-| Message negotiation | Built-in | Not included | Not included |
-| Real-time updates | WebSocket bus | Streaming | Stdio/SSE |
-| Verification | 4 methods including cross-check | Not included | Not included |
-| Focus | Agent-to-agent communication | Agent-to-agent tasks | Tool access for LLMs |
-
-Nexus is not a replacement for A2A or MCP. It operates at a different layer: while MCP connects models to tools and A2A defines task delegation, Nexus provides the network infrastructure that lets agents find each other, build trust, and communicate through a standardized protocol.
+```bash
+pytest -v
+# 91 passed
+```
 
 ## Tech Stack
 
-- **Python 3.11+** with full async/await
-- **FastAPI** for the HTTP and WebSocket API
-- **SQLite + aiosqlite** for zero-config persistence
-- **Pydantic v2** for data validation
-- **httpx** for async agent-to-agent HTTP
+- **Python 3.11+** — full async/await
+- **FastAPI** — HTTP + WebSocket API
+- **SQLite + aiosqlite** — zero-config persistence
+- **Pydantic v2** — data validation
+- **httpx** — async agent-to-agent communication
 
-## Contributing
+## Support
 
-Contributions are welcome. Please open an issue first to discuss what you'd like to change.
-
-```bash
-# Dev setup
-pip install -r requirements.txt
-pip install ruff
-
-# Lint
-ruff check .
-
-# Test
-pytest -v
-```
+[![Star this repo](https://img.shields.io/github/stars/timmeck/nexus?style=social)](https://github.com/timmeck/nexus)
+[![PayPal](https://img.shields.io/badge/Donate-PayPal-blue)](https://paypal.me/tmeck86)
 
 ## License
 
-[MIT](LICENSE) -- Tim Mecklenburg
+[MIT](LICENSE) — Tim Mecklenburg
 
 ---
 
