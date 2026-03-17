@@ -38,7 +38,18 @@ async def handle_request(request: NexusRequest) -> NexusResponse:
 
     Every step is audited. Policy, escrow, and trust are not optional sidecars —
     they sit in the critical path. State transitions are validated.
+    Duplicate requests (same request_id) are rejected.
     """
+    # ── Idempotency guard ────────────────────────────────────
+    if await _is_duplicate_request(request.request_id):
+        return NexusResponse(
+            request_id=request.request_id,
+            from_agent="nexus-core",
+            to_agent=request.from_agent,
+            status=ResponseStatus.REJECTED,
+            error=f"Duplicate request: {request.request_id} already processed",
+        )
+
     start = time.time()
     lifecycle = RequestLifecycle(request.request_id)
     trail = _new_trail(request)
@@ -347,6 +358,22 @@ async def _persist_event(request_id: str, step: str, from_state: str = "") -> No
         await db.commit()
     except Exception:
         log.debug("Failed to persist event %s for request %s", step, request_id)
+
+
+async def _is_duplicate_request(request_id: str) -> bool:
+    """Check if this request_id was already processed (idempotency guard)."""
+    try:
+        from nexus.database import get_db
+
+        db = await get_db()
+        row = await db.execute(
+            "SELECT COUNT(*) as c FROM request_events WHERE request_id = ?",
+            (request_id,),
+        )
+        result = await row.fetchone()
+        return result["c"] > 0
+    except Exception:
+        return False
 
 
 def _cleanup(request_id: str) -> None:

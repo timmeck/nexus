@@ -1,6 +1,7 @@
 """Adversarial invariant tests — prove enforcement holds under pressure.
 
 These are the "böse Tests" that ChatGPT demanded:
+0. Duplicate request rejected (idempotency)
 1. Policy reject blocks dispatch GUARANTEED
 2. Provider failure triggers NO settlement
 3. Illegal state transitions throw HARD
@@ -20,6 +21,32 @@ from tests.conftest import create_agent
 
 if TYPE_CHECKING:
     from httpx import AsyncClient
+
+
+# ── 0. Idempotency — duplicate request rejected ─────────────
+
+
+@pytest.mark.asyncio
+async def test_duplicate_request_rejected(client: AsyncClient):
+    """Same request_id submitted twice must be rejected the second time.
+
+    Invariant: No double escrow, no double settlement, no double trust update.
+    """
+    # First request (will fail at forwarding — no real agent — but gets processed)
+    payload = {
+        "request_id": "idempotency-test-fixed-id",
+        "from_agent": "consumer-1",
+        "query": "test idempotency",
+        "capability": "general",
+    }
+    resp1 = await client.post("/api/protocol/request", json=payload)
+    assert resp1.status_code == 200
+
+    # Second request with SAME request_id — must be rejected
+    resp2 = await client.post("/api/protocol/request", json=payload)
+    data2 = resp2.json()
+    assert data2["status"] == "rejected"
+    assert "Duplicate" in data2.get("error", "")
 
 
 # ── 1. Policy rejection is absolute ─────────────────────────
