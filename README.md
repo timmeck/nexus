@@ -1,6 +1,6 @@
 # Nexus
 
-**AI-to-AI Protocol Layer** | 9 Layers | 15 Features | 91 Tests
+**AI-to-AI Protocol Layer** | 9 Layers | 15 Features | 126 Tests
 
 [![CI](https://github.com/timmeck/nexus/actions/workflows/ci.yml/badge.svg)](https://github.com/timmeck/nexus/actions/workflows/ci.yml)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/downloads/)
@@ -8,9 +8,11 @@
 
 ---
 
-Nexus is a self-hosted protocol that enables AI agents to **discover**, **negotiate**, **transact**, and **verify** each other — without human intervention. Discovery + Trust + Routing + Payments + Federation + Adversarial Defense + Enterprise Compliance in one working system.
+Nexus is a self-hosted protocol layer that enables AI agents to **discover**, **negotiate**, **transact**, and **verify** each other — without human intervention. Discovery + Trust + Routing + Payments + Federation + Adversarial Defense + Enterprise Policy in one system with enforced request lifecycle.
 
 Think DNS + HTTPS + Payment Rails + Certificate Authority, but for AI agents.
+
+Every request passes through a **validated state machine**: Policy Gate → Routing → Budget Check → Escrow → Forwarding → Trust Recording → Settlement. No shortcuts — if it's not in the lifecycle, it's not part of the protocol.
 
 ![Nexus Dashboard](docs/dashboard.png)
 
@@ -34,16 +36,16 @@ Think DNS + HTTPS + Payment Rails + Certificate Authority, but for AI agents.
 |---|---------|-------------|
 | 1 | **Agent Registration** | Register agents with capabilities, pricing, SLA |
 | 2 | **Auth per Agent** | API keys + HMAC signing per agent |
-| 3 | **Multi-Agent Verification** | Ask 3+ agents, compare answers, score consensus |
+| 3 | **Multi-Agent Verification** | Capability-specific verifiers (structured/text), verdict: pass/fail/inconclusive |
 | 4 | **Federation** | Peer discovery, agent sync, cross-instance routing |
 | 5 | **Micropayments** | Credit wallets, pay-per-request, budgets |
 | 6 | **Capability Schema** | Formal skill definitions with JSON Schema |
 | 7 | **Slashing Penalties** | Trust + credit loss for bad outputs |
-| 8 | **Escrow Settlement** | Delayed payment with dispute window |
+| 8 | **Escrow Settlement** | Payment held in escrow during settlement window (enforced in main path) |
 | 9 | **Challenge Mechanism** | Agents can dispute others' outputs |
 | 10 | **Sybil Detection** | Rate limiting, similarity flagging, trust farming prevention |
 | 11 | **Data Locality** | Region/jurisdiction tagging, GDPR routing |
-| 12 | **Compliance Claims** | SHA-256 attestation, 10 claim types |
+| 12 | **Compliance Claims** | SHA-256 claim hashes, 10 claim types, verification workflow |
 | 13 | **Edge Gateways** | Kong/Tyk/DreamFactory integration configs |
 | 14 | **Architecture Docs** | Topology diagrams with failure scenarios |
 | 15 | **Protocol Spec** | RFC-style formal specification |
@@ -96,7 +98,7 @@ curl -X POST http://localhost:9500/api/protocol/request \
   }'
 ```
 
-Nexus finds the best agent, forwards the request, holds payment in escrow, verifies the response, updates trust scores, and releases payment.
+Nexus evaluates policies, finds the best compliant agent, checks budget, creates escrow, forwards the request with HMAC signing, records trust, and settles payment. Every step is tracked in a persistent audit trail.
 
 ### Register All 8 Products
 
@@ -127,16 +129,22 @@ All products expose a `/nexus/handle` endpoint for direct protocol communication
 Consumer Agent                    Nexus                     Provider Agent
       |                            |                            |
       |-- "I need text_analysis" ->|                            |
+      |                    [RECEIVED]                            |
+      |                    [POLICY_APPROVED]                     |
       |                            |-- finds best agent ------->|
-      |                            |-- checks compliance ------->|
+      |                    [ROUTED]                              |
+      |                    [BUDGET_CHECKED]                      |
       |                            |-- creates escrow ---------->|
-      |                            |-- forwards request -------->|
+      |                    [FORWARDING]                          |
+      |                            |-- forwards signed request ->|
       |                            |<--- response + confidence --|
-      |                            |-- verifies (optional) ----->|
-      |                            |-- releases payment -------->|
-      |<-- result + sources -------|                            |
-      |                            |-- updates trust score ----->|
+      |                    [TRUST_RECORDED]                      |
+      |                    [ESCROWED]                            |
+      |                    [SETTLED]                             |
+      |<-- result + audit trail ---|                            |
 ```
+
+State transitions are validated — illegal jumps (e.g. ROUTED → SETTLED) raise `InvalidTransitionError`.
 
 ## Adversarial Defense
 
@@ -152,7 +160,7 @@ Consumer Agent                    Nexus                     Provider Agent
 | Policy | What it enforces |
 |--------|-----------------|
 | **Data Locality** | Route only to agents in specific regions (EU, US, etc.) |
-| **Compliance Claims** | SHA-256 signed attestations (GDPR, SOC2, HIPAA, etc.) |
+| **Compliance Claims** | SHA-256 claim hashes with verification workflow (GDPR, SOC2, HIPAA, etc.) |
 | **Edge Gateways** | Pre-built configs for Kong, Tyk, DreamFactory |
 
 ## API Reference
@@ -171,8 +179,9 @@ Consumer Agent                    Nexus                     Provider Agent
 ### Protocol
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `POST` | `/api/protocol/request` | Submit request |
-| `POST` | `/api/protocol/verify` | Multi-agent verification |
+| `POST` | `/api/protocol/request` | Submit request (enforced lifecycle) |
+| `POST` | `/api/protocol/verify` | Multi-agent verification (capability-specific) |
+| `GET` | `/api/protocol/requests/{id}/events` | Persistent audit trail |
 | `GET` | `/api/protocol/active` | Active requests |
 
 ### Trust & Defense
@@ -236,8 +245,10 @@ Consumer Agent                    Nexus                     Provider Agent
 | Federation | Peer sync + remote routing | Not included | Not included |
 | Adversarial defense | Slashing, escrow, challenges, sybil | Not included | Not included |
 | Enterprise compliance | GDPR, SOC2, attestations | Planned | Not included |
-| Verification | Multi-agent cross-check | Not included | Not included |
-| Status | **Working implementation** | Spec only | Working (tools only) |
+| Verification | Capability-specific verifiers | Not included | Not included |
+| Request lifecycle | Validated state machine | Not included | Not included |
+| Audit trail | Persistent per-request events | Not included | Not included |
+| Status | **Enforced lifecycle implementation** | Spec only | Working (tools only) |
 
 ## Protocol Spec
 
@@ -298,7 +309,7 @@ docker compose up -d
 
 ```bash
 pytest -v
-# 91 passed
+# 126 passed
 ```
 
 ## Tech Stack

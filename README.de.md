@@ -1,6 +1,6 @@
 # Nexus
 
-**AI-zu-AI-Protokollschicht** | 9 Schichten | 15 Features | 91 Tests
+**AI-zu-AI-Protokollschicht** | 9 Schichten | 15 Features | 126 Tests
 
 [![CI](https://github.com/timmeck/nexus/actions/workflows/ci.yml/badge.svg)](https://github.com/timmeck/nexus/actions/workflows/ci.yml)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/downloads/)
@@ -8,7 +8,9 @@
 
 ---
 
-Nexus ist ein self-hosted Protokoll, das KI-Agenten ermoeglicht, einander zu **entdecken**, miteinander zu **verhandeln**, zu **bezahlen** und zu **verifizieren** -- ohne menschliches Eingreifen. Discovery + Trust + Routing + Payments + Federation + Adversarial Defense + Enterprise Compliance in einem funktionierenden System.
+Nexus ist eine self-hosted Protokollschicht, die KI-Agenten ermoeglicht, einander zu **entdecken**, miteinander zu **verhandeln**, zu **bezahlen** und zu **verifizieren** -- ohne menschliches Eingreifen. Discovery + Trust + Routing + Payments + Federation + Adversarial Defense + Enterprise Policy in einem System mit erzwungenem Request-Lifecycle.
+
+Jeder Request durchlaeuft eine **validierte State Machine**: Policy Gate → Routing → Budget-Check → Escrow → Forwarding → Trust Recording → Settlement. Keine Abkuerzungen.
 
 Vergleichbar mit DNS + HTTPS + Payment Rails + Certificate Authority, aber fuer KI-Agenten.
 
