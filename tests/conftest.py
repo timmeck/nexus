@@ -9,8 +9,8 @@ import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 
 
-@pytest.fixture(autouse=True)
-def _isolate_db(tmp_path, monkeypatch):
+@pytest_asyncio.fixture(autouse=True)
+async def _isolate_db(tmp_path, monkeypatch):
     """Patch DB_PATH to a fresh temporary file for every test function.
 
     Also reset the database module's cached connection so each test starts clean.
@@ -18,10 +18,12 @@ def _isolate_db(tmp_path, monkeypatch):
     nexus.database imports DB_PATH and DATA_DIR at module level, so we must
     patch the names in *both* nexus.config and nexus.database.
     """
+    from nexus.database import close_db
+
     import nexus.database as _dbmod
 
-    # Force-drop any cached connection reference from a previous test.
-    _dbmod._db = None
+    # Close any leftover connection from a previous test.
+    await close_db()
 
     db_file = tmp_path / f"test_nexus_{uuid.uuid4().hex[:8]}.db"
 
@@ -33,8 +35,8 @@ def _isolate_db(tmp_path, monkeypatch):
 
     yield
 
-    # Discard the connection so the next test starts fresh.
-    _dbmod._db = None
+    # Properly close the connection so aiosqlite threads don't leak.
+    await close_db()
 
 
 @pytest_asyncio.fixture
