@@ -20,8 +20,6 @@ async def _isolate_db(tmp_path, monkeypatch):
     """
     from nexus.database import close_db
 
-    import nexus.database as _dbmod
-
     # Close any leftover connection from a previous test.
     await close_db()
 
