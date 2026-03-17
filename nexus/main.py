@@ -14,7 +14,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from nexus import __version__
-from nexus.api import protocol, registry, router, trust, websocket, federation, payments, schemas
+from nexus.api import protocol, registry, router, trust, websocket, federation, payments, schemas, defense
 from nexus.config import STATIC_DIR
 from nexus.database import close_db, get_db
 
@@ -38,6 +38,8 @@ async def lifespan(app: FastAPI):
     await ensure_tables()
     from nexus.payments.service import ensure_tables as ensure_payment_tables
     await ensure_payment_tables()
+    from nexus.defense.service import ensure_tables as ensure_defense_tables
+    await ensure_defense_tables()
     yield
     await close_db()
     log.info("Nexus shut down.")
@@ -68,6 +70,7 @@ app.include_router(websocket.router)
 app.include_router(federation.router)
 app.include_router(payments.router)
 app.include_router(schemas.router)
+app.include_router(defense.router)
 
 # Dashboard static files
 STATIC_DIR.mkdir(parents=True, exist_ok=True)
@@ -130,6 +133,9 @@ async def stats():
     from nexus.payments.service import get_payment_stats
     pay_stats = await get_payment_stats()
 
+    from nexus.defense.service import get_defense_stats
+    def_stats = await get_defense_stats()
+
     return {
         "agents_total": agents_count,
         "agents_online": online_count,
@@ -142,5 +148,6 @@ async def stats():
         "verifications_consensus": consensus_count,
         "federation": fed_stats,
         "payments": pay_stats,
+        "defense": def_stats,
         "version": __version__,
     }

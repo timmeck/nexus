@@ -51,11 +51,13 @@ async def test_get_agent_hides_api_key(client, sample_agent_payload):
 
 
 async def _ensure_all_tables():
-    """Ensure federation and payment tables exist for stats tests."""
+    """Ensure all extra tables exist for stats tests."""
     from nexus.federation.service import ensure_tables
     await ensure_tables()
-    from nexus.payments.service import ensure_tables as ensure_payment_tables
-    await ensure_payment_tables()
+    from nexus.payments.service import ensure_tables as pt
+    await pt()
+    from nexus.defense.service import ensure_tables as dt
+    await dt()
 
 
 @pytest.mark.asyncio
