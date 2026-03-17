@@ -43,6 +43,14 @@ async def register_agent(payload: AgentCreate) -> Agent:
     )
     await db.commit()
     log.info("Registered agent %s (%s) at %s [auth=enabled]", payload.name, agent_id, payload.endpoint)
+
+    # Auto-create wallet for the new agent
+    try:
+        from nexus.payments.service import get_or_create_wallet
+        await get_or_create_wallet(agent_id, payload.name)
+    except Exception as e:
+        log.warning("Could not create wallet for %s: %s", agent_id, e)
+
     return await get_agent(agent_id)
 
 

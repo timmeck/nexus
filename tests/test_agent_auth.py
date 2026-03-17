@@ -50,11 +50,18 @@ async def test_get_agent_hides_api_key(client, sample_agent_payload):
     assert "..." in data["api_key"]
 
 
+async def _ensure_all_tables():
+    """Ensure federation and payment tables exist for stats tests."""
+    from nexus.federation.service import ensure_tables
+    await ensure_tables()
+    from nexus.payments.service import ensure_tables as ensure_payment_tables
+    await ensure_payment_tables()
+
+
 @pytest.mark.asyncio
 async def test_stats_includes_auth_count(client, sample_agent_payload):
     """Stats should show how many agents have auth enabled."""
-    from nexus.federation.service import ensure_tables
-    await ensure_tables()
+    await _ensure_all_tables()
 
     payload = sample_agent_payload()
     await create_agent(client, payload)
@@ -68,8 +75,7 @@ async def test_stats_includes_auth_count(client, sample_agent_payload):
 @pytest.mark.asyncio
 async def test_stats_includes_verification_count(client):
     """Stats should include verification counts."""
-    from nexus.federation.service import ensure_tables
-    await ensure_tables()
+    await _ensure_all_tables()
 
     resp = await client.get("/api/stats")
     data = resp.json()

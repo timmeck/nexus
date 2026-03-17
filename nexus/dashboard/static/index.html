@@ -498,6 +498,14 @@
                 <div class="header-stat-value" id="stat-verifications">0</div>
                 <div class="header-stat-label">Verifications</div>
             </div>
+            <div class="header-stat">
+                <div class="header-stat-value" id="stat-credits">0</div>
+                <div class="header-stat-label">Credits</div>
+            </div>
+            <div class="header-stat">
+                <div class="header-stat-value" id="stat-federation">0</div>
+                <div class="header-stat-label">Peers</div>
+            </div>
         </div>
     </header>
 
@@ -602,6 +610,37 @@
                 </div>
             </div>
         </div>
+        <!-- Wallets -->
+        <div class="card">
+            <div class="card-header">
+                <span class="card-title">Agent Wallets</span>
+                <button class="btn btn-sm" onclick="refreshWallets()">Refresh</button>
+            </div>
+            <div class="card-body">
+                <div id="wallets-list">
+                    <div class="empty">
+                        <div class="empty-icon">&#9670;</div>
+                        <div>No wallets yet</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Capability Schema Browser -->
+        <div class="card">
+            <div class="card-header">
+                <span class="card-title">Capability Schemas</span>
+                <button class="btn btn-sm" onclick="refreshSchemas()">Browse</button>
+            </div>
+            <div class="card-body">
+                <div id="schemas-list">
+                    <div class="empty">
+                        <div class="empty-icon">&#9670;</div>
+                        <div>Click Browse to load capability schemas</div>
+                    </div>
+                </div>
+            </div>
+        </div>
     </main>
 
     <script>
@@ -624,6 +663,13 @@
                         : '—';
                 document.getElementById('stat-auth').textContent = data.agents_auth_enabled || 0;
                 document.getElementById('stat-verifications').textContent = data.verifications_total || 0;
+                const payData = data.payments || {};
+                document.getElementById('stat-credits').textContent =
+                    payData.total_credits_in_circulation
+                        ? Math.round(payData.total_credits_in_circulation)
+                        : 0;
+                const fedData = data.federation || {};
+                document.getElementById('stat-federation').textContent = fedData.peers || 0;
             } catch (e) {
                 console.error('Stats fetch failed:', e);
             }
@@ -871,6 +917,81 @@
                 ws.onerror = () => ws.close();
             } catch (e) {
                 setTimeout(connectWs, 3000);
+            }
+        }
+
+        // ── Wallets ──────────────────────────────────────
+        async function refreshWallets() {
+            try {
+                const res = await fetch(`${API}/api/payments/wallets`);
+                const data = await res.json();
+                const list = document.getElementById('wallets-list');
+
+                if (!data.wallets || data.wallets.length === 0) {
+                    list.innerHTML = '<div class="empty"><div class="empty-icon">&#9670;</div><div>No wallets yet</div></div>';
+                    return;
+                }
+
+                list.innerHTML = data.wallets.map(w => {
+                    const balColor = w.balance > 50 ? 'var(--green)' : w.balance > 10 ? 'var(--gold)' : 'var(--red)';
+                    return `
+                        <div style="padding:8px 0;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
+                            <div>
+                                <span style="font-size:12px;font-weight:600">${escHtml(w.agent_name || w.agent_id)}</span>
+                            </div>
+                            <div style="text-align:right">
+                                <span style="font-size:14px;font-weight:700;color:${balColor}">${w.balance.toFixed(2)}</span>
+                                <span style="font-size:10px;color:var(--text-dim)"> credits</span>
+                                <div style="font-size:10px;color:var(--text-dim)">
+                                    spent: ${w.total_spent.toFixed(2)} | earned: ${w.total_earned.toFixed(2)}
+                                </div>
+                            </div>
+                        </div>`;
+                }).join('');
+            } catch (e) {
+                console.error('Wallets fetch failed:', e);
+            }
+        }
+
+        // ── Schemas ─────────────────────────────────────
+        async function refreshSchemas() {
+            try {
+                const res = await fetch(`${API}/api/schemas/discover`);
+                const data = await res.json();
+                const list = document.getElementById('schemas-list');
+
+                if (!data.capabilities || data.capabilities.length === 0) {
+                    list.innerHTML = '<div class="empty"><div class="empty-icon">&#9670;</div><div>No capabilities found</div></div>';
+                    return;
+                }
+
+                // Group by category
+                const groups = {};
+                data.capabilities.forEach(c => {
+                    const cat = c.category || 'general';
+                    if (!groups[cat]) groups[cat] = [];
+                    groups[cat].push(c);
+                });
+
+                list.innerHTML = Object.entries(groups).map(([cat, caps]) => `
+                    <div style="margin-bottom:14px">
+                        <div style="font-size:10px;font-weight:600;color:var(--gold);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">${escHtml(cat)}</div>
+                        ${caps.map(c => `
+                            <div style="padding:6px 0;border-bottom:1px solid var(--border);font-size:11px;display:flex;justify-content:space-between">
+                                <div>
+                                    <span style="color:var(--text)">${escHtml(c.capability)}</span>
+                                    <span style="color:var(--text-dim)"> @ ${escHtml(c.agent_name)}</span>
+                                    ${c.has_schema ? '<span class="auth-badge enabled" style="margin-left:4px">SCHEMA</span>' : ''}
+                                </div>
+                                <div style="color:var(--text-dim)">
+                                    ${c.price.toFixed(3)} cr | ${c.avg_ms}ms | ${c.languages.join(',')}
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                `).join('');
+            } catch (e) {
+                console.error('Schemas fetch failed:', e);
             }
         }
 

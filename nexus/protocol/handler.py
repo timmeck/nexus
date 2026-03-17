@@ -10,6 +10,7 @@ import httpx
 from nexus.auth import sign_request
 from nexus.models.agent import AgentStatus, AgentUpdate
 from nexus.models.protocol import NexusRequest, NexusResponse, ResponseStatus
+from nexus.payments import service as payments
 from nexus.registry import service as registry
 from nexus.router import service as router
 from nexus.trust import service as trust
@@ -72,6 +73,27 @@ async def handle_request(request: NexusRequest) -> NexusResponse:
             cost=response.cost,
             response_ms=elapsed_ms,
         )
+
+        # Process payment if request was successful and has a cost
+        if success and response.cost > 0:
+            try:
+                payment = await payments.process_payment(
+                    request_id=request.request_id,
+                    consumer_id=request.from_agent,
+                    provider_id=best.agent.id,
+                    amount=response.cost,
+                    description=f"Request: {request.capability or 'general'}",
+                )
+                if payment.get("success"):
+                    response.meta["payment"] = {
+                        "tx_id": payment["tx_id"],
+                        "amount": payment["amount"],
+                    }
+                else:
+                    log.warning("Payment failed for request %s: %s",
+                               request.request_id[:8], payment.get("error"))
+            except Exception as e:
+                log.warning("Payment processing error: %s", e)
 
         _cleanup(request.request_id)
         return response
