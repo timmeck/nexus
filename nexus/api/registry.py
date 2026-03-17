@@ -101,6 +101,49 @@ async def discover(
     }
 
 
+@router.get("/agents/{agent_id}/health")
+async def agent_health(agent_id: str):
+    """Full health assessment for an agent.
+
+    Not just "online" — but alive, trusted, solvent, policy-valid.
+    """
+    agent = await service.get_agent(agent_id)
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent not found")
+
+    from nexus.payments.service import get_balance
+
+    balance = await get_balance(agent_id)
+
+    # Determine health dimensions
+    alive = agent.status in (AgentStatus.ONLINE, AgentStatus.DEGRADED)
+    trusted = agent.trust_score >= 0.3
+    solvent = balance >= 1.0
+    mature = agent.total_interactions >= 5
+
+    # Overall health
+    healthy = alive and trusted and solvent
+
+    return {
+        "agent_id": agent_id,
+        "agent_name": agent.name,
+        "status": agent.status,
+        "health": {
+            "alive": alive,
+            "trusted": trusted,
+            "solvent": solvent,
+            "mature": mature,
+            "healthy": healthy,
+        },
+        "details": {
+            "trust_score": agent.trust_score,
+            "balance": balance,
+            "total_interactions": agent.total_interactions,
+            "last_heartbeat": agent.last_heartbeat.isoformat() if agent.last_heartbeat else None,
+        },
+    }
+
+
 def _sanitize_agent(agent: Agent) -> dict:
     """Return agent data with API key hidden."""
     data = agent.model_dump(mode="json")

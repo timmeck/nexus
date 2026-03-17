@@ -177,3 +177,29 @@ async def test_reaper_marks_stale_agent_offline(client: AsyncClient, sample_agen
     resp = await client.get(f"/api/registry/agents/{agent_id}")
     assert resp.status_code == 200
     assert resp.json()["status"] == "offline"
+
+
+@pytest.mark.asyncio
+async def test_agent_health_endpoint(client: AsyncClient, sample_agent_payload):
+    """GET /api/registry/agents/{id}/health returns full health assessment."""
+    created = await create_agent(client, sample_agent_payload(name="health-agent"))
+    agent_id = created["id"]
+
+    resp = await client.get(f"/api/registry/agents/{agent_id}/health")
+    assert resp.status_code == 200
+    data = resp.json()
+
+    assert data["agent_id"] == agent_id
+    assert "health" in data
+    health = data["health"]
+
+    # New agent: alive (online), not yet mature (0 interactions)
+    assert health["alive"] is True
+    assert health["mature"] is False
+    assert health["solvent"] is True  # 100 credits default
+    assert health["trusted"] is True  # 0.5 > 0.3 threshold
+    assert health["healthy"] is True  # alive + trusted + solvent
+
+    assert "details" in data
+    assert data["details"]["trust_score"] == 0.5
+    assert data["details"]["balance"] == 100.0

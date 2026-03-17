@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from nexus.models.agent import AgentCreate, Capability
+from nexus.models.agent import AgentCreate, Capability, DeterminismLevel, PrivacyTier
 from nexus.models.protocol import NexusRequest, NexusResponse, ResponseStatus, VerificationMethod
 
 
@@ -143,3 +143,33 @@ class TestAgentCreate:
         assert cap.price_per_request == 0.0
         assert cap.avg_response_ms == 5000
         assert cap.languages == ["en"]
+        # Rich fields have sensible defaults
+        assert cap.determinism == DeterminismLevel.NON_DETERMINISTIC
+        assert cap.verification_modes == ["text_similarity"]
+        assert cap.max_input_tokens is None
+        assert cap.max_output_tokens is None
+        assert cap.structured_output is False
+        assert cap.privacy_tier == PrivacyTier.PUBLIC
+        assert cap.requires_network is False
+        assert cap.sla_p95_ms is None
+
+    def test_capability_rich_fields(self):
+        """Capability accepts rich routing/verification/policy fields."""
+        cap = Capability(
+            name="data_extraction",
+            determinism=DeterminismLevel.SEMI_DETERMINISTIC,
+            verification_modes=["structured", "text_similarity"],
+            max_input_tokens=8000,
+            max_output_tokens=2000,
+            structured_output=True,
+            privacy_tier=PrivacyTier.CONFIDENTIAL,
+            requires_network=True,
+            sla_p95_ms=3000,
+        )
+        assert cap.determinism == DeterminismLevel.SEMI_DETERMINISTIC
+        assert "structured" in cap.verification_modes
+        assert cap.max_input_tokens == 8000
+        assert cap.structured_output is True
+        assert cap.privacy_tier == PrivacyTier.CONFIDENTIAL
+        assert cap.requires_network is True
+        assert cap.sla_p95_ms == 3000
