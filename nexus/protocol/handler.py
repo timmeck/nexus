@@ -153,40 +153,20 @@ async def handle_request(request: NexusRequest) -> NexusResponse:
         if response.cost > 0:
             trail_step(trail, "escrow")
 
-            try:
-                escrow = await defense.create_escrow(
-                    request_id=request.request_id,
-                    consumer_id=request.from_agent,
-                    provider_id=best.agent.id,
-                    amount=response.cost,
-                )
-                lifecycle.transition(RequestState.ESCROWED)
-                trail["escrow"] = {
-                    "escrow_id": escrow["escrow_id"],
-                    "amount": escrow["amount"],
-                    "status": escrow["status"],
-                    "release_at": escrow["release_at"],
-                }
-                response.meta["escrow"] = trail["escrow"]
-            except Exception as e:
-                # Fallback to direct payment if escrow fails
-                log.warning("Escrow failed, falling back to direct payment: %s", e)
-                trail_step(trail, "direct_payment_fallback")
-                try:
-                    payment = await payments.process_payment(
-                        request_id=request.request_id,
-                        consumer_id=request.from_agent,
-                        provider_id=best.agent.id,
-                        amount=response.cost,
-                        description=f"Request: {request.capability or 'general'}",
-                    )
-                    if payment.get("success"):
-                        response.meta["payment"] = {
-                            "tx_id": payment["tx_id"],
-                            "amount": payment["amount"],
-                        }
-                except Exception as pe:
-                    log.warning("Payment processing error: %s", pe)
+            escrow = await defense.create_escrow(
+                request_id=request.request_id,
+                consumer_id=request.from_agent,
+                provider_id=best.agent.id,
+                amount=response.cost,
+            )
+            lifecycle.transition(RequestState.ESCROWED)
+            trail["escrow"] = {
+                "escrow_id": escrow["escrow_id"],
+                "amount": escrow["amount"],
+                "status": escrow["status"],
+                "release_at": escrow["release_at"],
+            }
+            response.meta["escrow"] = trail["escrow"]
 
         # ── Step 7: Mark settled ─────────────────────────────────
         lifecycle.transition(RequestState.SETTLED)

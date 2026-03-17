@@ -285,11 +285,10 @@ async def test_budget_check_prevents_dispatch_even_with_partial_funds(client: As
 
 
 @pytest.mark.asyncio
-async def test_no_direct_payment_in_successful_path(client: AsyncClient):
-    """Verify that the handler code doesn't have a direct payment path
-    that bypasses escrow for successful responses.
+async def test_no_direct_payment_in_handler(client: AsyncClient):
+    """Handler must NEVER call process_payment — only create_escrow.
 
-    This is a code-level invariant test.
+    This is the core economic invariant: no settlement bypasses escrow.
     """
     import inspect
 
@@ -297,10 +296,112 @@ async def test_no_direct_payment_in_successful_path(client: AsyncClient):
 
     source = inspect.getsource(handler.handle_request)
 
-    # The handler should use create_escrow for the primary path
+    # Escrow must be in the handler
     assert "create_escrow" in source
 
-    # process_payment should only appear in the fallback block
-    # Count occurrences — should be exactly 1 (in the except/fallback)
+    # process_payment must be GONE — no fallback, no bypass
     payment_count = source.count("process_payment")
-    assert payment_count <= 1, f"process_payment appears {payment_count} times — should be 0 or 1 (fallback only)"
+    assert payment_count == 0, f"process_payment found {payment_count} times in handler — must be 0"
+
+
+# ── 8. Escrow release and refund are mutually exclusive ──────
+
+
+@pytest.mark.asyncio
+async def test_escrow_double_release_blocked(client: AsyncClient):
+    """Same escrow cannot be released twice.
+
+    Invariant: Second release returns error, no double payment.
+    """
+    from nexus.defense.service import create_escrow, release_escrow
+
+    consumer = await create_agent(
+        client,
+        {"name": "esc-consumer", "endpoint": "http://localhost:19850", "capabilities": []},
+    )
+    provider = await create_agent(
+        client,
+        {"name": "esc-provider", "endpoint": "http://localhost:19851", "capabilities": []},
+    )
+
+    escrow = await create_escrow(
+        request_id="inv-test-escrow-1",
+        consumer_id=consumer["id"],
+        provider_id=provider["id"],
+        amount=5.0,
+    )
+
+    # First release — should succeed
+    result1 = await release_escrow(escrow["escrow_id"])
+    assert "error" not in result1
+    assert result1["status"] == "released"
+
+    # Second release — must fail
+    result2 = await release_escrow(escrow["escrow_id"])
+    assert "error" in result2
+
+
+@pytest.mark.asyncio
+async def test_escrow_release_after_dispute_blocked(client: AsyncClient):
+    """Disputed escrow cannot be released.
+
+    Invariant: Refund and Release are mutually exclusive.
+    """
+    from nexus.defense.service import create_escrow, dispute_escrow, release_escrow
+
+    consumer = await create_agent(
+        client,
+        {"name": "esc2-consumer", "endpoint": "http://localhost:19852", "capabilities": []},
+    )
+    provider = await create_agent(
+        client,
+        {"name": "esc2-provider", "endpoint": "http://localhost:19853", "capabilities": []},
+    )
+
+    escrow = await create_escrow(
+        request_id="inv-test-escrow-2",
+        consumer_id=consumer["id"],
+        provider_id=provider["id"],
+        amount=5.0,
+    )
+
+    # Dispute first
+    dispute_result = await dispute_escrow(escrow["escrow_id"], reason="bad output")
+    assert dispute_result["status"] == "disputed"
+
+    # Release after dispute — must fail
+    release_result = await release_escrow(escrow["escrow_id"])
+    assert "error" in release_result
+
+
+@pytest.mark.asyncio
+async def test_escrow_dispute_after_release_blocked(client: AsyncClient):
+    """Released escrow cannot be disputed.
+
+    Invariant: Refund and Release are mutually exclusive (reverse direction).
+    """
+    from nexus.defense.service import create_escrow, dispute_escrow, release_escrow
+
+    consumer = await create_agent(
+        client,
+        {"name": "esc3-consumer", "endpoint": "http://localhost:19854", "capabilities": []},
+    )
+    provider = await create_agent(
+        client,
+        {"name": "esc3-provider", "endpoint": "http://localhost:19855", "capabilities": []},
+    )
+
+    escrow = await create_escrow(
+        request_id="inv-test-escrow-3",
+        consumer_id=consumer["id"],
+        provider_id=provider["id"],
+        amount=5.0,
+    )
+
+    # Release first
+    release_result = await release_escrow(escrow["escrow_id"])
+    assert release_result["status"] == "released"
+
+    # Dispute after release — must fail
+    dispute_result = await dispute_escrow(escrow["escrow_id"], reason="too late")
+    assert "error" in dispute_result
