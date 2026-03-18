@@ -1,6 +1,6 @@
 # Nexus
 
-**AI-to-AI Protocol Layer** | 9 Layers | 15 Features | 198 Tests
+**Nexus catches unreliable AI agent outputs before they cost you money.**
 
 [![CI](https://github.com/timmeck/nexus/actions/workflows/ci.yml/badge.svg)](https://github.com/timmeck/nexus/actions/workflows/ci.yml)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/downloads/)
@@ -8,132 +8,67 @@
 
 ---
 
-Nexus is a protocol for coordinating AI agents under enforceable rules.
+## The Problem
 
-Instead of relying on best-effort execution, Nexus enforces:
+When Agent A asks Agent B for work, there's no guarantee the result is correct. Agent B can return garbage with 95% confidence, and Agent A pays anyway. No verification, no recourse, no accountability.
 
-- **Explicit request lifecycle** — every interaction follows a validated state machine
-- **Escrow-based settlement** — no direct payment paths, all outcomes are gated
-- **Capability-aware verification** — results are evaluated based on task type
-- **Policy and eligibility gates** — only compliant and healthy agents can execute
-- **Adversarial invariants** — critical guarantees are enforced and tested under failure conditions
+**Nexus adds enforcement.** Agent outputs are verified. Payments are held in escrow. Bad actors get slashed. Every step is audited.
 
-Invalid transitions fail. Duplicate requests are rejected. Settlement cannot bypass escrow. Terminal states cannot be mutated.
+## 60-Second Demo
 
-Nexus focuses on making agent interactions **reliable under adversarial conditions**, not just functional in ideal ones.
-
-![Nexus Dashboard](docs/dashboard.png)
-
-## The 9 Layers
-
-| Layer | What it does |
-|-------|-------------|
-| **Discovery** | Agent registry, capability search, heartbeat monitoring |
-| **Trust** | Reputation scoring, interaction tracking, trust reports |
-| **Protocol** | Standardized NexusRequest/NexusResponse format |
-| **Routing** | Best, cheapest, fastest, or most trusted agent matching |
-| **Federation** | Multiple Nexus instances sync agent registries across networks |
-| **Payments** | Credit wallets, pay-per-request, transaction history |
-| **Schemas** | Formal capability definitions (like OpenAPI for agent skills) |
-| **Defense** | Slashing, escrow, challenge mechanism, sybil detection |
-| **Policy** | Data locality (GDPR), compliance claims, edge gateway integration |
-
-## 15 Features
-
-| # | Feature | Description |
-|---|---------|-------------|
-| 1 | **Agent Registration** | Register agents with capabilities, pricing, SLA |
-| 2 | **Auth per Agent** | API keys + HMAC signing per agent |
-| 3 | **Multi-Agent Verification** | Capability-specific verifiers (structured/text), verdict: pass/fail/inconclusive |
-| 4 | **Federation** | Peer discovery, agent sync, cross-instance routing |
-| 5 | **Micropayments** | Credit wallets, pay-per-request, budgets |
-| 6 | **Capability Schema** | Formal skill definitions with JSON Schema |
-| 7 | **Slashing Penalties** | Trust + credit loss for bad outputs |
-| 8 | **Escrow Settlement** | Payment held in escrow during settlement window (enforced in main path) |
-| 9 | **Challenge Mechanism** | Agents can dispute others' outputs |
-| 10 | **Sybil Detection** | Rate limiting, similarity flagging, trust farming prevention |
-| 11 | **Data Locality** | Region/jurisdiction tagging, GDPR routing |
-| 12 | **Compliance Claims** | SHA-256 claim hashes, 10 claim types, verification workflow |
-| 13 | **Edge Gateways** | Kong/Tyk/DreamFactory integration configs |
-| 14 | **Architecture Docs** | Topology diagrams with failure scenarios |
-| 15 | **Protocol Spec** | RFC-style formal specification |
-
-## Quick Start
+One script shows the entire story:
 
 ```bash
 git clone https://github.com/timmeck/nexus.git
 cd nexus
 pip install -r requirements.txt
+python demo_cheat.py
+```
 
+What happens:
+1. A **cheater agent** returns garbage with 95% confidence
+2. An **honest agent** returns real analysis
+3. Nexus **verification catches the cheater** (26% consensus score)
+4. Consumer **disputes the escrow** -- credits returned
+5. Cheater gets **slashed** -- trust score drops, credits lost
+
+## Red Team Results
+
+We ran 4 rounds of adversarial testing against the verification system. Every round exposed weaknesses, every weakness was fixed and regression-tested.
+
+| Adversarial Pattern | Verdict | Score | Result |
+|---|---|---|---|
+| Baseline (2 honest agents) | PASS | 100% | Correct |
+| Dumb Liar (obvious garbage, high confidence) | FAIL | 100% | **CAUGHT** |
+| Plausible Liar (correct format, wrong facts) | FAIL | 65% | **CAUGHT** |
+| Partial Cheater (80% correct, wrong penalties) | FAIL | 82% | **CAUGHT** |
+| Style Mimic (exact format, EU->US, euros->dollars) | FAIL | 66% | **CAUGHT** |
+| Lazy Agent (generic fluff, no data) | FAIL | 100% | **CAUGHT** |
+| Confidence Gamer (99% confidence, vague output) | FAIL | 86% | **CAUGHT** |
+| Colluding Pair vs 1 Honest | FAIL | 60% | **CAUGHT** |
+| Colluding Pair vs 2 Honest | FAIL | 60% | **CAUGHT** |
+| Omission Attack (hides all numbers/dates) | FAIL | 100% | **CAUGHT** |
+| Word Numbers ("thirty five million") | FAIL | 65% | **CAUGHT** |
+| Coordinated Collusion (varied wrong answers) | FAIL | 74% | **CAUGHT** |
+
+**11/11 adversarial patterns caught. 0 escaped.**
+
+False positive tests (honest agents with different styles): 3/4 pass, 1 edge case at 97%.
+
+Run it yourself: `python red_team_isolated.py`
+
+## Quick Start
+
+```bash
 # Start Nexus
 python run.py
-
-# Open dashboard: http://localhost:9500
-# API docs: http://localhost:9500/docs
+# Dashboard: http://localhost:9500
+# API docs:  http://localhost:9500/docs
 ```
 
-### Register an Agent
+## 10-Line Integration
 
-```bash
-curl -X POST http://localhost:9500/api/registry/agents \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "my-agent",
-    "endpoint": "http://localhost:8000",
-    "capabilities": [
-      {
-        "name": "summarization",
-        "description": "Summarizes text documents",
-        "price_per_request": 0.01,
-        "avg_response_ms": 2000,
-        "languages": ["en", "de"]
-      }
-    ],
-    "tags": ["nlp", "text"]
-  }'
-```
-
-### Send a Request
-
-```bash
-curl -X POST http://localhost:9500/api/protocol/request \
-  -H "Content-Type: application/json" \
-  -d '{
-    "from_agent": "consumer-001",
-    "query": "Summarize the latest research on LLM agents",
-    "capability": "summarization",
-    "budget": 0.05
-  }'
-```
-
-Nexus evaluates policies, finds the best compliant agent, checks budget, creates escrow, forwards the request with HMAC signing, records trust, and settles payment. Every step is tracked in a persistent audit trail.
-
-### Register All 8 Products
-
-```bash
-python agents/register_existing.py
-```
-
-Registers Cortex, DocBrain, Mnemonic, DeepResearch, Sentinel, CostControl, SafetyProxy, and LogAnalyst.
-
-## Connected Products
-
-| Agent | Port | Capabilities |
-|-------|------|-------------|
-| **Cortex** | 8100 | text_generation, code_analysis |
-| **DocBrain** | 8200 | document_analysis, knowledge_retrieval |
-| **Mnemonic** | 8300 | memory_management, context_tracking |
-| **DeepResearch** | 8400 | deep_research, fact_checking |
-| **Sentinel** | 8500 | security_analysis, threat_detection |
-| **CostControl** | 8600 | cost_tracking, budget_management |
-| **SafetyProxy** | 8700 | prompt_injection_detection, pii_detection |
-| **LogAnalyst** | 8800 | log_analysis, error_explanation |
-
-All products use the **NexusAdapter SDK** — HMAC signature verification, automatic heartbeats (30s), and auto-registration with Nexus on startup. See [Agent Integration](#agent-integration) below.
-
-## Agent Integration
-
-Any FastAPI agent can join the Nexus network by copying `nexus/sdk_standalone.py` (zero dependencies on the nexus package):
+Any FastAPI agent joins the network with the standalone SDK (zero nexus dependencies):
 
 ```python
 from nexus_sdk import NexusAdapter
@@ -154,245 +89,165 @@ async def handle(query: str, params: dict) -> dict:
     return {"result": result, "confidence": 0.9, "cost": 0.01}
 ```
 
-The adapter automatically:
-- Registers with Nexus on startup
-- Sends heartbeats every 30s (keeps agent "online")
-- Verifies HMAC signatures on incoming requests (3-layer replay protection)
-- Handles request/response serialization
+The adapter handles registration, heartbeats (30s), HMAC verification, and request/response serialization automatically.
 
 ## How It Works
 
 ```
-Consumer Agent                    Nexus                     Provider Agent
-      |                            |                            |
-      |-- "I need text_analysis" ->|                            |
-      |                    [RECEIVED]                            |
-      |                    [POLICY_APPROVED]                     |
-      |                            |-- finds best agent ------->|
-      |                    [ROUTED]                              |
-      |                    [BUDGET_CHECKED]                      |
-      |                            |-- creates escrow ---------->|
-      |                    [FORWARDING]                          |
-      |                            |-- forwards signed request ->|
-      |                            |<--- response + confidence --|
-      |                    [TRUST_RECORDED]                      |
-      |                    [ESCROWED]                            |
-      |                    [SETTLED]                             |
-      |<-- result + audit trail ---|                            |
+Consumer                         Nexus                        Provider
+   |                              |                              |
+   |-- request ------------------>|                              |
+   |                     [POLICY CHECK]                          |
+   |                     [ROUTE TO BEST AGENT]                   |
+   |                     [BUDGET CHECK]                          |
+   |                     [CREATE ESCROW]                         |
+   |                              |-- signed request ----------->|
+   |                              |<-- response + confidence ----|
+   |                     [RECORD TRUST]                          |
+   |                     [SETTLE OR DISPUTE]                     |
+   |<-- result + audit trail -----|                              |
 ```
 
-State transitions are validated — illegal jumps (e.g. ROUTED → SETTLED) raise `InvalidTransitionError`.
+Every state transition is validated. Invalid jumps raise `InvalidTransitionError`. Terminal states cannot be mutated.
+
+## Verification System
+
+Nexus uses **claim-level verification**, not just string similarity:
+
+1. **Extract** factual claims from each agent's answer (numbers, currencies, dates, jurisdictions, percentages)
+2. **Normalize** claims ("35 million" = "35M" = "thirty five million" = 35000000)
+3. **Compare** critical fields across agents with weighted scoring
+4. **Veto** PASS when critical facts disagree (wrong amounts, wrong jurisdiction, wrong dates)
+5. **Detect omissions** when an agent suspiciously hides specific data
+
+This catches the attacks that naive string matching misses: partial cheaters (80% correct, wrong penalties), style mimics (same format, different country/currency), and adversarial formatting (numbers as words).
+
+## Defense Mechanisms
+
+| Mechanism | What it does |
+|---|---|
+| **Escrow** | Payments held during settlement window. Consumer can dispute. |
+| **Slashing** | Bad output + high confidence = trust AND credit penalty |
+| **Challenges** | Any agent can dispute another's output |
+| **Sybil Detection** | Rate-limited registration, similarity flagging |
+| **Replay Protection** | HMAC + timestamp + signature cache (3-layer) |
+| **Reconciliation** | Background job catches stuck requests and orphaned escrows |
+
+## Connected Agents
+
+8 agents already integrated via NexusAdapter SDK:
+
+| Agent | Capabilities |
+|---|---|
+| **Cortex** | text_generation, code_analysis |
+| **DocBrain** | document_analysis, knowledge_retrieval |
+| **Mnemonic** | memory_management, context_tracking |
+| **DeepResearch** | deep_research, fact_checking |
+| **Sentinel** | security_analysis, threat_detection |
+| **CostControl** | cost_tracking, budget_management |
+| **SafetyProxy** | prompt_injection_detection, pii_detection |
+| **LogAnalyst** | log_analysis, error_explanation |
+
+## Architecture
+
+9 layers, each in the enforced request path:
+
+| Layer | Purpose |
+|---|---|
+| Discovery | Agent registry, capability search, heartbeat monitoring |
+| Trust | Reputation scoring, interaction tracking |
+| Protocol | NexusRequest/NexusResponse lifecycle |
+| Routing | Best, cheapest, fastest, or most trusted agent matching |
+| Federation | Cross-instance agent registry sync |
+| Payments | Credit wallets, pay-per-request |
+| Schemas | Formal capability definitions |
+| Defense | Slashing, escrow, challenges, sybil detection |
+| Policy | Data locality, compliance claims, routing policies |
 
 ## What Nexus Does NOT Claim
 
+- Universal truth verification (we measure consistency, not ground truth)
 - Perfect resistance to all adversarial strategies
-- Guaranteed correctness of agent outputs
-- Full enterprise-grade compliance enforcement
 - Production-readiness at scale (yet)
+- Coverage for all task types (strongest for structured, factual outputs)
 
-Instead, Nexus makes **incorrect behavior harder, more visible, and less profitable** than correct behavior.
+Nexus makes incorrect behavior **harder, more visible, and less profitable** than correct behavior.
 
-## Adversarial Defense
+## Testing
 
-| Mechanism | How it works |
-|-----------|-------------|
-| **Slashing** | Agents claiming high confidence but delivering bad output lose trust AND credits |
-| **Escrow** | Payment held during settlement window, consumer can dispute. No direct payment paths. |
-| **Challenge** | Any agent can dispute another's output for a small fee |
-| **Sybil Detection** | Rate-limited registration, similarity flagging, trust farming prevention |
-| **Replay Protection** | HMAC + timestamp + signature cache (3-layer) |
-| **Reconciliation** | Background job detects stuck requests and orphaned escrows |
+198 tests + adversarial red team suite:
 
-## Enterprise Policy
+```bash
+# Unit + integration tests
+pytest -v               # 198 passed
 
-| Policy | What it enforces |
-|--------|-----------------|
-| **Data Locality** | Route only to agents in specific regions (EU, US, etc.) |
-| **Compliance Claims** | Declared compliance claims with verification workflow (GDPR, SOC2, HIPAA) |
-| **Edge Gateways** | Pre-built configs for Kong, Tyk, DreamFactory |
+# Killer demo
+python demo_cheat.py    # Cheater caught in 60 seconds
+
+# Full red team suite (12 adversarial + 4 false-positive tests)
+python red_team_isolated.py
+```
 
 ## API Reference
 
+<details>
+<summary>Full API (click to expand)</summary>
+
 ### Registry
 | Method | Endpoint | Description |
-|--------|----------|-------------|
+|---|---|---|
 | `POST` | `/api/registry/agents` | Register agent |
 | `GET` | `/api/registry/agents` | List agents |
 | `GET` | `/api/registry/agents/{id}` | Get agent |
-| `PATCH` | `/api/registry/agents/{id}` | Update agent |
-| `DELETE` | `/api/registry/agents/{id}` | Unregister |
 | `POST` | `/api/registry/agents/{id}/heartbeat` | Heartbeat |
-| `GET` | `/api/registry/agents/{id}/health` | Full health assessment |
 | `GET` | `/api/registry/discover` | Find by capability |
 
 ### Protocol
 | Method | Endpoint | Description |
-|--------|----------|-------------|
+|---|---|---|
 | `POST` | `/api/protocol/request` | Submit request (enforced lifecycle) |
-| `POST` | `/api/protocol/verify` | Multi-agent verification (capability-specific) |
-| `GET` | `/api/protocol/requests/{id}/events` | Persistent audit trail |
-| `GET` | `/api/protocol/active` | Active requests |
+| `POST` | `/api/protocol/verify` | Multi-agent verification |
+| `GET` | `/api/protocol/requests/{id}/events` | Audit trail |
 
 ### Trust & Defense
 | Method | Endpoint | Description |
-|--------|----------|-------------|
+|---|---|---|
 | `GET` | `/api/trust/report/{id}` | Trust report |
-| `GET` | `/api/trust/history/{id}` | Interaction history |
-| `GET` | `/api/trust/ledger/{id}` | Trust delta ledger (append-only) |
 | `POST` | `/api/defense/slash` | Slash agent |
-| `POST` | `/api/defense/challenges` | Challenge output |
-| `POST` | `/api/defense/challenges/{id}/resolve` | Resolve challenge |
 | `GET` | `/api/defense/escrows` | List escrows |
 | `POST` | `/api/defense/escrows/{id}/dispute` | Dispute escrow |
-| `GET` | `/api/defense/sybil/clusters` | Sybil analysis |
-| `GET` | `/api/defense/sybil/maturity/{id}` | Agent maturity |
-
-### Federation
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/api/federation/peers` | List peers |
-| `POST` | `/api/federation/peers` | Add peer |
-| `POST` | `/api/federation/sync/{id}` | Sync with peer |
-| `GET` | `/api/federation/agents` | Remote agents |
 
 ### Payments
 | Method | Endpoint | Description |
-|--------|----------|-------------|
+|---|---|---|
 | `GET` | `/api/payments/wallets` | List wallets |
-| `GET` | `/api/payments/wallets/{id}` | Get wallet |
+| `GET` | `/api/payments/wallets/{id}/balance` | Get balance |
 | `POST` | `/api/payments/wallets/{id}/topup` | Add credits |
-| `GET` | `/api/payments/transactions/{id}` | Transaction history |
-| `GET` | `/api/payments/stats` | Payment stats |
-
-### Policy
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `POST` | `/api/policy/locality` | Set data locality |
-| `GET` | `/api/policy/localities` | List all localities |
-| `POST` | `/api/policy/compliance` | Submit compliance claim |
-| `GET` | `/api/policy/compliance/{agent_id}` | Agent claims |
-| `POST` | `/api/policy/compliance/{claim_id}/verify` | Verify claim |
-| `POST` | `/api/policy/routing` | Create routing policy |
-| `POST` | `/api/policy/gateways` | Register edge gateway |
-| `GET` | `/api/policy/audit` | Audit trail |
 
 ### System
 | Method | Endpoint | Description |
-|--------|----------|-------------|
+|---|---|---|
 | `GET` | `/health` | Health check |
-| `GET` | `/api/stats` | Full network stats |
-| `WS` | `/ws/agent/{id}` | Agent WebSocket |
+| `GET` | `/api/stats` | Network stats |
 | `WS` | `/ws/dashboard` | Dashboard WebSocket |
 
-## Comparison
-
-| Feature | Nexus | Google A2A | MCP |
-|---------|-------|------------|-----|
-| Agent discovery | Registry + capability search | DNS-based | Not included |
-| Trust scoring | Automatic per-interaction | Not included | Not included |
-| Routing | 4 strategies | Client-side | N/A |
-| Payments | Built-in credit system | Not included | Not included |
-| Federation | Peer sync + remote routing | Not included | Not included |
-| Adversarial defense | Slashing, escrow, challenges, sybil | Not included | Not included |
-| Enterprise policy | Data locality, compliance claims, routing policies | Planned | Not included |
-| Verification | Capability-specific verifiers | Not included | Not included |
-| Request lifecycle | Validated state machine | Not included | Not included |
-| Audit trail | Persistent per-request events | Not included | Not included |
-| Status | **Enforced lifecycle implementation** | Spec only | Working (tools only) |
-
-## Protocol Spec
-
-### NexusRequest
-```json
-{
-  "request_id": "auto-generated",
-  "from_agent": "consumer-id",
-  "to_agent": null,
-  "query": "The actual question",
-  "capability": "required capability",
-  "constraints": {"region": "eu"},
-  "budget": 0.05,
-  "deadline_ms": 5000,
-  "verification": "cross_check",
-  "language": "en"
-}
-```
-
-### NexusResponse
-```json
-{
-  "response_id": "auto-generated",
-  "request_id": "matching request",
-  "from_agent": "provider-id",
-  "status": "completed",
-  "answer": "The response",
-  "confidence": 0.92,
-  "sources": ["source1"],
-  "cost": 0.02,
-  "processing_ms": 340
-}
-```
-
-## Demo
-
-```bash
-# Terminal 1: Nexus
-python run.py
-
-# Terminal 2: Provider agent
-python agents/provider.py
-
-# Terminal 3: Consumer agent
-python agents/consumer.py
-
-# Register all 8 products
-python agents/register_existing.py
-```
-
-## Docker
-
-```bash
-docker compose up -d
-```
-
-## Integrity Testing
-
-198 tests across 7 categories — not just correctness, but adversarial hardening:
-
-| Category | Tests | What it proves |
-|----------|-------|---------------|
-| Core protocol | ~50 | Lifecycle, state machine, routing, policy, trust |
-| Adversarial invariants | 26 | CAS enforcement, terminal guards, shadow path blocks |
-| Chaos/Load | 9 | Retry storms, budget contention, reconciler flood, races |
-| Red Team Attacks | 8 | Ghost release, replay, payload swap, trust farming |
-| Crash Injection | 7 | Partial completion at 7 lifecycle edges |
-| Cross-Object Consistency | 9 | Illegal state detection, wallet conservation |
-| Verification & Schemas | ~20 | Multi-agent verification, capability schemas |
-
-28 formal invariants documented in [`docs/invariants.md`](docs/invariants.md).
-
-```bash
-pytest -v
-# 198 passed
-```
+</details>
 
 ## Tech Stack
 
-- **Python 3.11+** — full async/await
-- **FastAPI** — HTTP + WebSocket API
-- **SQLite + aiosqlite** — zero-config persistence
-- **Pydantic v2** — data validation
-- **httpx** — async agent-to-agent communication
-
-## Support
-
-[![Star this repo](https://img.shields.io/github/stars/timmeck/nexus?style=social)](https://github.com/timmeck/nexus)
-[![PayPal](https://img.shields.io/badge/Donate-PayPal-blue)](https://paypal.me/tmeck86)
+- **Python 3.11+** with full async/await
+- **FastAPI** for HTTP + WebSocket API
+- **SQLite + aiosqlite** for zero-config persistence
+- **Pydantic v2** for data validation
+- **httpx** for async agent-to-agent communication
 
 ## License
 
-[MIT](LICENSE) — Tim Mecklenburg
+[MIT](LICENSE) -- Tim Mecklenburg
 
 ---
 
 Built by [Tim Mecklenburg](https://github.com/timmeck)
+
+[![Star this repo](https://img.shields.io/github/stars/timmeck/nexus?style=social)](https://github.com/timmeck/nexus)
+[![PayPal](https://img.shields.io/badge/Donate-PayPal-blue)](https://paypal.me/tmeck86)
