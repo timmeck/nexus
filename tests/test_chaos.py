@@ -328,7 +328,7 @@ async def test_challenge_vs_release_race(client: AsyncClient):
 
     # Both should complete without crash — they operate on different tables
     # (escrow vs challenges). The CAS on each table ensures no double effect.
-    release_result, challenge_result = results
+    _release_result, challenge_result = results
 
     # Challenge resolution should succeed (CAS on challenges table)
     assert challenge_result.get("status") in ("upheld", None) or "error" not in challenge_result
