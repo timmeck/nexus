@@ -308,6 +308,32 @@ def test_claims_single_answer_inconclusive():
     assert verdict == Verdict.INCONCLUSIVE
 
 
+def test_claims_shared_hallucination_passes():
+    """Known limitation: if all agents agree on the same wrong fact, Nexus says PASS.
+    This is by design — Nexus measures consistency, not ground truth."""
+    answers = [
+        _answer("a1", "The EU announced 50 million euros penalty on June 1, 2025. 12 months to comply. 10% of turnover."),
+        _answer("a2", "On June 1, 2025, the EU set a 50 million euro fine. 10% of revenue. 12-month deadline."),
+    ]
+    verdict, score, _contras = verify_claims(answers)
+    # All agents agree on the same (wrong) facts → PASS
+    # This is the honest limit of consensus-based verification
+    assert verdict == Verdict.PASS
+    assert score >= 0.7
+
+
+def test_claims_partial_number_conflict_fails():
+    """When agents agree on most facts but have conflicting numbers,
+    the number mismatch triggers critical FAIL (numbers are critical claims)."""
+    answers = [
+        _answer("a1", "The EU announced the AI Act on March 15, 2025. 35 million euros penalty. 7% of turnover. The text has 72 words."),
+        _answer("a2", "The EU released the AI Act on March 15, 2025. 35 million euros fine. 7% of turnover. The text has 85 words."),
+    ]
+    verdict, _score, _contras = verify_claims(answers)
+    # 72 vs 85 is a bilateral number conflict → critical mismatch → FAIL
+    assert verdict == Verdict.FAIL
+
+
 def test_claims_different_style_same_facts_pass():
     answers = [
         _answer("a1", "Word count: 72. Character count: 456. The EU announced the AI Act on March 15, 2025. Penalty: 35 million euros, 7% of turnover. 24 months to comply."),
