@@ -11,6 +11,7 @@ Usage:
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import multiprocessing
 import re
 import sys
@@ -174,6 +175,7 @@ def make_app(name: str, handler_fn) -> FastAPI:
 
 # ── Cheater handlers ─────────────────────────────────────────────
 
+
 def dumb_liar_handler(req: AgentRequest) -> AgentResponse:
     """Obvious garbage, high confidence."""
     return AgentResponse(
@@ -317,6 +319,7 @@ def colluder_handler(name: str):
             cost=0.05,
             processing_ms=135,
         )
+
     return handler
 
 
@@ -375,6 +378,7 @@ def word_number_handler(req: AgentRequest) -> AgentResponse:
 def colluder_v2_handler(name: str):
     """Collusion v2: coordinated but NOT identical wrong answers.
     Both wrong on the same facts but with slight variation."""
+
     def handler(req: AgentRequest) -> AgentResponse:
         if "1" in name:
             answer = (
@@ -405,6 +409,7 @@ def colluder_v2_handler(name: str):
             cost=0.05,
             processing_ms=130,
         )
+
     return handler
 
 
@@ -440,6 +445,7 @@ def run_agent_server(agent_type: str, agent_name: str, port: int):
 
 def run_nexus_server():
     from nexus.main import app
+
     uvicorn.run(app, host="127.0.0.1", port=NEXUS_PORT, log_level="error")
 
 
@@ -464,13 +470,15 @@ async def register(client: httpx.AsyncClient, name: str, port: int) -> str:
             "name": name,
             "endpoint": f"http://localhost:{port}",
             "description": f"Red team: {name}",
-            "capabilities": [{
-                "name": "text_analysis",
-                "description": "Analyzes text",
-                "price_per_request": 0.05,
-                "avg_response_ms": 500,
-                "languages": ["en"],
-            }],
+            "capabilities": [
+                {
+                    "name": "text_analysis",
+                    "description": "Analyzes text",
+                    "price_per_request": 0.05,
+                    "avg_response_ms": 500,
+                    "languages": ["en"],
+                }
+            ],
             "tags": ["red-team"],
         },
     )
@@ -650,10 +658,8 @@ async def run_single_test(test: dict, test_num: int, total: int) -> dict:
 
     # Clean DB for fresh state
     db_path = os.path.join("data", "nexus.db")
-    try:
+    with contextlib.suppress(OSError):
         os.remove(db_path)
-    except OSError:
-        pass
 
     procs = []
 
@@ -709,21 +715,8 @@ async def run_single_test(test: dict, test_num: int, total: int) -> dict:
             contradictions = result.get("contradictions", [])
             answers = result.get("answers", [])
 
-            # Determine if this is correct behavior
-            expected = test["expected_verdict"]
-            if expected == "pass":
-                correct = verdict == "pass"
-            elif expected == "pass_wrong":
-                # We EXPECT the system to be fooled here
-                correct = verdict == "pass"  # fooled = system passed wrong answer
-                if correct:
-                    was_fooled = True
-                else:
-                    was_fooled = False
-            else:
-                correct = verdict != "pass"  # caught = didn't pass
-
             # Determine caught status for cheater tests
+            expected = test["expected_verdict"]
             if not test["cheaters"]:
                 caught = verdict == "pass"
                 caught_label = "PASS" if caught else "FALSE NEGATIVE"
@@ -744,21 +737,22 @@ async def run_single_test(test: dict, test_num: int, total: int) -> dict:
 
             # Print results
             verdict_color = GREEN if verdict == "pass" else (RED if verdict == "fail" else YELLOW)
-            print(f"  Verdict: {BOLD}{verdict_color}{verdict.upper()}{RESET}  |  "
-                  f"Consensus: {score:.0%}  |  "
-                  f"Agents: {result.get('agents_responded', '?')}/{result.get('agents_queried', '?')}  |  "
-                  f"Result: {caught_color}{BOLD}{caught_label}{RESET}")
+            print(
+                f"  Verdict: {BOLD}{verdict_color}{verdict.upper()}{RESET}  |  "
+                f"Consensus: {score:.0%}  |  "
+                f"Agents: {result.get('agents_responded', '?')}/{result.get('agents_queried', '?')}  |  "
+                f"Result: {caught_color}{BOLD}{caught_label}{RESET}"
+            )
 
             # Show per-agent answers
             if answers:
                 for a in answers:
                     name = a.get("agent_name", "?")
                     conf = a.get("confidence", 0)
-                    status = a.get("status", "?")
                     ans_preview = a.get("answer", "")[:60].replace("\n", " ")
                     is_cheater = name in test["cheaters"]
                     marker = f"{RED}*{RESET}" if is_cheater else " "
-                    print(f"    {marker} {name:<20} conf={conf:.0%}  \"{ans_preview}...\"")
+                    print(f'    {marker} {name:<20} conf={conf:.0%}  "{ans_preview}..."')
 
             if contradictions:
                 for c in contradictions[:2]:
@@ -827,17 +821,17 @@ async def run_all():
     baseline = [r for r in results if r["cheaters"] == 0]
     baseline_pass = sum(1 for r in baseline if r["caught"])
 
-    print(f"\n  {BOLD}Baseline:{RESET} {'PASS' if baseline_pass else 'FAIL'} "
-          f"(honest agents {'reached' if baseline_pass else 'failed to reach'} consensus)")
-    print(f"  {BOLD}Cheater tests:{RESET} Caught {caught}/{len(cheater_tests)}, "
-          f"Escaped {escaped}/{len(cheater_tests)}")
+    print(
+        f"\n  {BOLD}Baseline:{RESET} {'PASS' if baseline_pass else 'FAIL'} "
+        f"(honest agents {'reached' if baseline_pass else 'failed to reach'} consensus)"
+    )
+    print(f"  {BOLD}Cheater tests:{RESET} Caught {caught}/{len(cheater_tests)}, Escaped {escaped}/{len(cheater_tests)}")
 
     if escaped > 0:
         banner("VULNERABILITIES FOUND", RED)
         for r in cheater_tests:
             if not r["caught"]:
-                print(f"  {RED}[!!] {r['test']}: verdict={r['verdict']}, "
-                      f"score={r['score']:.2f}{RESET}")
+                print(f"  {RED}[!!] {r['test']}: verdict={r['verdict']}, score={r['score']:.2f}{RESET}")
 
         print(f"\n  {DIM}These cheater types bypassed verification.{RESET}")
         print(f"  {DIM}The verification system needs hardening.{RESET}")
@@ -873,10 +867,9 @@ async def run_all():
 
     # Cleanup
     import os
-    try:
+
+    with contextlib.suppress(OSError):
         os.remove(os.path.join("data", "nexus.db"))
-    except OSError:
-        pass
 
 
 # ═══════════════════════════════════════════════════════════════════════

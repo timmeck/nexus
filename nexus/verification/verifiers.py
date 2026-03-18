@@ -11,7 +11,6 @@ from __future__ import annotations
 import json
 import logging
 import re
-from collections import Counter
 from difflib import SequenceMatcher
 
 from nexus.models.verification import AgentAnswer, Verdict, VerificationMode
@@ -248,16 +247,41 @@ CLAIM_WEIGHTS = {
 
 # Word-to-number mapping for adversarial formatting defense
 WORD_NUMBERS = {
-    "zero": 0, "one": 1, "two": 2, "three": 3, "four": 4, "five": 5,
-    "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10,
-    "eleven": 11, "twelve": 12, "thirteen": 13, "fourteen": 14, "fifteen": 15,
-    "sixteen": 16, "seventeen": 17, "eighteen": 18, "nineteen": 19,
-    "twenty": 20, "thirty": 30, "forty": 40, "fifty": 50,
-    "sixty": 60, "seventy": 70, "eighty": 80, "ninety": 90,
+    "zero": 0,
+    "one": 1,
+    "two": 2,
+    "three": 3,
+    "four": 4,
+    "five": 5,
+    "six": 6,
+    "seven": 7,
+    "eight": 8,
+    "nine": 9,
+    "ten": 10,
+    "eleven": 11,
+    "twelve": 12,
+    "thirteen": 13,
+    "fourteen": 14,
+    "fifteen": 15,
+    "sixteen": 16,
+    "seventeen": 17,
+    "eighteen": 18,
+    "nineteen": 19,
+    "twenty": 20,
+    "thirty": 30,
+    "forty": 40,
+    "fifty": 50,
+    "sixty": 60,
+    "seventy": 70,
+    "eighty": 80,
+    "ninety": 90,
 }
 
 WORD_MULTIPLIERS = {
-    "hundred": 100, "thousand": 1_000, "million": 1_000_000, "billion": 1_000_000_000,
+    "hundred": 100,
+    "thousand": 1_000,
+    "million": 1_000_000,
+    "billion": 1_000_000_000,
 }
 
 # Minimum number of critical claims expected from a real analysis
@@ -321,11 +345,14 @@ def extract_claims(text: str) -> dict[str, list[str]]:
     lower = text.lower()
 
     # Word numbers: convert "thirty five million" -> 35000000
-    for num_str, num_val in _words_to_number(lower):
+    for _num_str, num_val in _words_to_number(lower):
         claims["number"].append(str(num_val))
 
     # Also extract word-based percentages: "ten percent"
-    for m in re.finditer(r"(zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety)\s*(?:\s+(?:one|two|three|four|five|six|seven|eight|nine))?\s*percent", lower):
+    for m in re.finditer(
+        r"(zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety)\s*(?:\s+(?:one|two|three|four|five|six|seven|eight|nine))?\s*percent",
+        lower,
+    ):
         word_nums = re.findall(r"[a-z]+", m.group(0).replace("percent", "").strip())
         val = sum(WORD_NUMBERS.get(w, 0) for w in word_nums)
         if val > 0:
@@ -333,20 +360,52 @@ def extract_claims(text: str) -> dict[str, list[str]]:
 
     # Word-based dates: "march fifteenth" or ordinals
     ordinals = {
-        "first": 1, "second": 2, "third": 3, "fourth": 4, "fifth": 5,
-        "sixth": 6, "seventh": 7, "eighth": 8, "ninth": 9, "tenth": 10,
-        "eleventh": 11, "twelfth": 12, "thirteenth": 13, "fourteenth": 14,
-        "fifteenth": 15, "sixteenth": 16, "seventeenth": 17, "eighteenth": 18,
-        "nineteenth": 19, "twentieth": 20, "twenty first": 21, "twenty second": 22,
-        "twenty third": 23, "twenty fourth": 24, "twenty fifth": 25,
-        "twenty sixth": 26, "twenty seventh": 27, "twenty eighth": 28,
-        "twenty ninth": 29, "thirtieth": 30, "thirty first": 31,
+        "first": 1,
+        "second": 2,
+        "third": 3,
+        "fourth": 4,
+        "fifth": 5,
+        "sixth": 6,
+        "seventh": 7,
+        "eighth": 8,
+        "ninth": 9,
+        "tenth": 10,
+        "eleventh": 11,
+        "twelfth": 12,
+        "thirteenth": 13,
+        "fourteenth": 14,
+        "fifteenth": 15,
+        "sixteenth": 16,
+        "seventeenth": 17,
+        "eighteenth": 18,
+        "nineteenth": 19,
+        "twentieth": 20,
+        "twenty first": 21,
+        "twenty second": 22,
+        "twenty third": 23,
+        "twenty fourth": 24,
+        "twenty fifth": 25,
+        "twenty sixth": 26,
+        "twenty seventh": 27,
+        "twenty eighth": 28,
+        "twenty ninth": 29,
+        "thirtieth": 30,
+        "thirty first": 31,
     }
 
     months_map = {
-        "january": "01", "february": "02", "march": "03", "april": "04",
-        "may": "05", "june": "06", "july": "07", "august": "08",
-        "september": "09", "october": "10", "november": "11", "december": "12",
+        "january": "01",
+        "february": "02",
+        "march": "03",
+        "april": "04",
+        "may": "05",
+        "june": "06",
+        "july": "07",
+        "august": "08",
+        "september": "09",
+        "october": "10",
+        "november": "11",
+        "december": "12",
     }
 
     for month_name, month_num in months_map.items():
@@ -393,18 +452,32 @@ def extract_claims(text: str) -> dict[str, list[str]]:
 
     # Dates (various formats)
     months = {
-        "january": "01", "february": "02", "march": "03", "april": "04",
-        "may": "05", "june": "06", "july": "07", "august": "08",
-        "september": "09", "october": "10", "november": "11", "december": "12",
+        "january": "01",
+        "february": "02",
+        "march": "03",
+        "april": "04",
+        "may": "05",
+        "june": "06",
+        "july": "07",
+        "august": "08",
+        "september": "09",
+        "october": "10",
+        "november": "11",
+        "december": "12",
     }
-    for m in re.finditer(r"(january|february|march|april|may|june|july|august|september|october|november|december)\s+(\d{1,2}),?\s+(\d{4})", lower):
+    for m in re.finditer(
+        r"(january|february|march|april|may|june|july|august|september|october|november|december)\s+(\d{1,2}),?\s+(\d{4})",
+        lower,
+    ):
         month = months[m.group(1)]
         day = m.group(2).zfill(2)
         year = m.group(3)
         claims["date"].append(f"{year}-{month}-{day}")
 
     # Also catch "month year" without day
-    for m in re.finditer(r"(january|february|march|april|may|june|july|august|september|october|november|december)\s+(\d{4})", lower):
+    for m in re.finditer(
+        r"(january|february|march|april|may|june|july|august|september|october|november|december)\s+(\d{4})", lower
+    ):
         month = months[m.group(1)]
         year = m.group(2)
         claims["date"].append(f"{year}-{month}")
@@ -415,8 +488,16 @@ def extract_claims(text: str) -> dict[str, list[str]]:
 
     # Jurisdictions / entities
     jurisdictions = [
-        "european union", "eu", "united states", "us", "usa",
-        "united kingdom", "uk", "china", "japan", "india",
+        "european union",
+        "eu",
+        "united states",
+        "us",
+        "usa",
+        "united kingdom",
+        "uk",
+        "china",
+        "japan",
+        "india",
         "european commission",
     ]
     for j in jurisdictions:
@@ -435,8 +516,11 @@ def extract_claims(text: str) -> dict[str, list[str]]:
 
     # Named entities (organizations, acts)
     entity_patterns = [
-        r"ai\s+act", r"ai\s+safety\s+act", r"ai\s+governance",
-        r"conformity\s+assessments?", r"safety\s+evaluations?",
+        r"ai\s+act",
+        r"ai\s+safety\s+act",
+        r"ai\s+governance",
+        r"conformity\s+assessments?",
+        r"safety\s+evaluations?",
         r"mandatory\s+registration",
     ]
     for pattern in entity_patterns:
@@ -484,10 +568,7 @@ def verify_claims(
     # it's likely omitting facts (Omission Attack).
     critical_counts = []
     for agent, claims in agent_claims:
-        count = sum(
-            len(claims.get(cat, []))
-            for cat in CRITICAL_CLAIM_TYPES
-        )
+        count = sum(len(claims.get(cat, [])) for cat in CRITICAL_CLAIM_TYPES)
         critical_counts.append((agent.agent_name, count))
 
     if critical_counts:
@@ -553,9 +634,7 @@ def verify_claims(
                     details.append(f"{name_i} has {diff_i}")
                 if diff_j:
                     details.append(f"{name_j} has {diff_j}")
-                contradictions.append(
-                    f"[{category}] {name_i} vs {name_j}: {', '.join(details)}"
-                )
+                contradictions.append(f"[{category}] {name_i} vs {name_j}: {', '.join(details)}")
 
                 # Mark critical mismatches
                 if category in CRITICAL_CLAIM_TYPES and avg_jaccard < 0.8:

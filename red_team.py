@@ -254,9 +254,9 @@ def create_plausible_liar_app() -> FastAPI:
         # Same structure as honest agent, but key facts are WRONG
         answer = (
             "Text Analysis Results:\n"
-            "  Word count: 84\n"          # wrong (should be ~81)
-            "  Character count: 502\n"     # wrong
-            "  Sentence count: 6\n"        # wrong (should be 5)
+            "  Word count: 84\n"  # wrong (should be ~81)
+            "  Character count: 502\n"  # wrong
+            "  Sentence count: 6\n"  # wrong (should be 5)
             "  Summary: The EU announced the AI Act on June 20, 2025, requiring "  # WRONG date
             "conformity assessments for high-risk AI systems. Companies have 18 months "  # WRONG timeline
             "to comply, with penalties up to 20 million euros or 4% of global turnover."  # WRONG penalties
@@ -298,9 +298,9 @@ def create_partial_cheater_app() -> FastAPI:
         # Correct word count and char count, but wrong penalty and timeline
         answer = (
             f"Text Analysis Results:\n"
-            f"  Word count: {len(words)}\n"       # correct
+            f"  Word count: {len(words)}\n"  # correct
             f"  Character count: {len(analyze_text)}\n"  # correct
-            f"  Sentence count: 5\n"                     # correct
+            f"  Sentence count: 5\n"  # correct
             f"  Summary: The EU announced the AI Act on March 15, 2025, requiring "  # correct date
             f"conformity assessments for high-risk AI systems. Companies have 24 months "  # correct
             f"to comply, with penalties up to 50 million euros or 10% of global turnover."  # WRONG!
@@ -337,9 +337,9 @@ def create_style_mimic_app() -> FastAPI:
         # Same structure, same labels, but about a DIFFERENT regulation
         answer = (
             "Text Analysis Results:\n"
-            "  Word count: 81\n"            # same number
-            "  Character count: 486\n"       # same number
-            "  Sentence count: 5\n"          # same number
+            "  Word count: 81\n"  # same number
+            "  Character count: 486\n"  # same number
+            "  Sentence count: 5\n"  # same number
             "  Summary: The US announced the AI Safety Act on March 15, 2025, requiring "  # WRONG country
             "safety evaluations for high-risk AI systems. Companies have 24 months "
             "to comply, with penalties up to 35 million dollars or 7% of global turnover."  # dollars not euros
@@ -484,6 +484,7 @@ def _run(app_factory, port, *args):
 
 def run_nexus():
     from nexus.main import app
+
     uvicorn.run(app, host="127.0.0.1", port=9500, log_level="error")
 
 
@@ -774,14 +775,9 @@ async def run_all_tests():
                 score = result["score"]
                 caught = result["caught"]
 
-                if caught:
-                    verdict_str = f"{GREEN}CAUGHT{RESET}"
-                else:
-                    verdict_str = f"{RED}ESCAPED{RESET}"
+                verdict_str = f"{GREEN}CAUGHT{RESET}" if caught else f"{RED}ESCAPED{RESET}"
 
-                print(f"  Verdict: {BOLD}{verdict.upper()}{RESET}  |  "
-                      f"Consensus: {score:.0%}  |  "
-                      f"Result: {verdict_str}")
+                print(f"  Verdict: {BOLD}{verdict.upper()}{RESET}  |  Consensus: {score:.0%}  |  Result: {verdict_str}")
 
                 if result["contradictions"]:
                     for c in result["contradictions"][:3]:
@@ -804,10 +800,7 @@ async def run_all_tests():
             for r in results:
                 verdict = r["verdict"].upper()
                 score = f"{r['score']:.0%}"
-                if r["caught"]:
-                    result_str = f"{GREEN}CAUGHT{RESET}"
-                else:
-                    result_str = f"{RED}ESCAPED{RESET}"
+                result_str = f"{GREEN}CAUGHT{RESET}" if r["caught"] else f"{RED}ESCAPED{RESET}"
                 print(f"  {r['test']:<25} {verdict:<15} {score:<10} {result_str}")
 
             print(f"  {'-' * 62}")
@@ -837,8 +830,8 @@ async def run_all_tests():
             # Technical notes
             section("Technical Analysis")
             info("Verification method: text_similarity (SequenceMatcher)")
-            info(f"PASS threshold: >= 0.6 consensus score")
-            info(f"FAIL threshold: < 0.3 consensus score")
+            info("PASS threshold: >= 0.6 consensus score")
+            info("FAIL threshold: < 0.3 consensus score")
             info(f"Total agents in pool: {len(all_ids)}")
             info(f"Honest agents: 2  |  Adversarial agents: {len(all_ids) - 2}")
             print()

@@ -342,7 +342,7 @@ async def dispute_escrow(
 async def run_demo():
     """The main demo sequence."""
 
-    banner("NEXUS DEMO -- \"AI agents can't cheat each other.\"")
+    banner('NEXUS DEMO -- "AI agents can\'t cheat each other."')
 
     # ── Start servers ────────────────────────────────────────────────
     step(0, "Starting servers...")
@@ -423,11 +423,14 @@ async def run_demo():
             # ── Send request to cheater ──────────────────────────────
             step(3, "Consumer sends request to cheater agent...")
 
-            info(f"Query: \"{QUERY[:80]}...\"")
+            info(f'Query: "{QUERY[:80]}..."')
             print()
 
             cheat_response = await send_request(
-                client, consumer_id, cheater_id, QUERY,
+                client,
+                consumer_id,
+                cheater_id,
+                QUERY,
             )
 
             highlight("Status", cheat_response.get("status"), YELLOW)
@@ -448,7 +451,10 @@ async def run_demo():
             step(4, "Compare: send same query to honest agent...")
 
             honest_response = await send_request(
-                client, consumer_id, honest_id, QUERY,
+                client,
+                consumer_id,
+                honest_id,
+                QUERY,
             )
 
             highlight("Status", honest_response.get("status"), GREEN)
@@ -459,8 +465,8 @@ async def run_demo():
             highlight("Confidence", f"{honest_response.get('confidence', 0):.0%}", GREEN)
 
             print()
-            fail(f"Cheater said: \"{cheat_response.get('answer', '')[:60]}...\"")
-            ok(f"Honest said:  \"{answer_lines[0][:60]}...\"")
+            fail(f'Cheater said: "{cheat_response.get("answer", "")[:60]}..."')
+            ok(f'Honest said:  "{answer_lines[0][:60]}..."')
             print()
             info("The cheater ignored the query entirely and returned generic garbage.")
             info("But claimed 95% confidence to maximize their payment.")
