@@ -8,11 +8,19 @@
 
 ---
 
-Nexus is a self-hosted protocol layer that enables AI agents to **discover**, **negotiate**, **transact**, and **verify** each other — without human intervention. Discovery + Trust + Routing + Payments + Federation + Adversarial Defense + Enterprise Policy in one system with enforced request lifecycle.
+Nexus is a protocol for coordinating AI agents under enforceable rules.
 
-Think DNS + HTTPS + Payment Rails + Certificate Authority, but for AI agents.
+Instead of relying on best-effort execution, Nexus enforces:
 
-Every request passes through a **validated state machine**: Policy Gate → Routing → Budget Check → Escrow → Forwarding → Trust Recording → Settlement. No shortcuts — if it's not in the lifecycle, it's not part of the protocol.
+- **Explicit request lifecycle** — every interaction follows a validated state machine
+- **Escrow-based settlement** — no direct payment paths, all outcomes are gated
+- **Capability-aware verification** — results are evaluated based on task type
+- **Policy and eligibility gates** — only compliant and healthy agents can execute
+- **Adversarial invariants** — critical guarantees are enforced and tested under failure conditions
+
+Invalid transitions fail. Duplicate requests are rejected. Settlement cannot bypass escrow. Terminal states cannot be mutated.
+
+Nexus focuses on making agent interactions **reliable under adversarial conditions**, not just functional in ideal ones.
 
 ![Nexus Dashboard](docs/dashboard.png)
 
@@ -146,21 +154,32 @@ Consumer Agent                    Nexus                     Provider Agent
 
 State transitions are validated — illegal jumps (e.g. ROUTED → SETTLED) raise `InvalidTransitionError`.
 
+## What Nexus Does NOT Claim
+
+- Perfect resistance to all adversarial strategies
+- Guaranteed correctness of agent outputs
+- Full enterprise-grade compliance enforcement
+- Production-readiness at scale (yet)
+
+Instead, Nexus makes **incorrect behavior harder, more visible, and less profitable** than correct behavior.
+
 ## Adversarial Defense
 
 | Mechanism | How it works |
 |-----------|-------------|
 | **Slashing** | Agents claiming high confidence but delivering bad output lose trust AND credits |
-| **Escrow** | Payment held during settlement window, consumer can dispute |
-| **Challenge** | Any agent can dispute another's output for a small fee; independent verification |
+| **Escrow** | Payment held during settlement window, consumer can dispute. No direct payment paths. |
+| **Challenge** | Any agent can dispute another's output for a small fee |
 | **Sybil Detection** | Rate-limited registration, similarity flagging, trust farming prevention |
+| **Replay Protection** | HMAC + timestamp + signature cache (3-layer) |
+| **Reconciliation** | Background job detects stuck requests and orphaned escrows |
 
 ## Enterprise Policy
 
 | Policy | What it enforces |
 |--------|-----------------|
 | **Data Locality** | Route only to agents in specific regions (EU, US, etc.) |
-| **Compliance Claims** | SHA-256 claim hashes with verification workflow (GDPR, SOC2, HIPAA, etc.) |
+| **Compliance Claims** | Declared compliance claims with verification workflow (GDPR, SOC2, HIPAA) |
 | **Edge Gateways** | Pre-built configs for Kong, Tyk, DreamFactory |
 
 ## API Reference
@@ -246,7 +265,7 @@ State transitions are validated — illegal jumps (e.g. ROUTED → SETTLED) rais
 | Payments | Built-in credit system | Not included | Not included |
 | Federation | Peer sync + remote routing | Not included | Not included |
 | Adversarial defense | Slashing, escrow, challenges, sybil | Not included | Not included |
-| Enterprise compliance | GDPR, SOC2, attestations | Planned | Not included |
+| Enterprise policy | Data locality, compliance claims, routing policies | Planned | Not included |
 | Verification | Capability-specific verifiers | Not included | Not included |
 | Request lifecycle | Validated state machine | Not included | Not included |
 | Audit trail | Persistent per-request events | Not included | Not included |

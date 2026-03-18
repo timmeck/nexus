@@ -8,11 +8,19 @@
 
 ---
 
-Nexus ist eine self-hosted Protokollschicht, die KI-Agenten ermoeglicht, einander zu **entdecken**, miteinander zu **verhandeln**, zu **bezahlen** und zu **verifizieren** -- ohne menschliches Eingreifen. Discovery + Trust + Routing + Payments + Federation + Adversarial Defense + Enterprise Policy in einem System mit erzwungenem Request-Lifecycle.
+Nexus ist ein Protokoll zur Koordination von KI-Agenten unter erzwungenen Regeln.
 
-Jeder Request durchlaeuft eine **validierte State Machine**: Policy Gate → Routing → Budget-Check → Escrow → Forwarding → Trust Recording → Settlement. Keine Abkuerzungen.
+Statt Best-Effort-Ausfuehrung erzwingt Nexus:
 
-Vergleichbar mit DNS + HTTPS + Payment Rails + Certificate Authority, aber fuer KI-Agenten.
+- **Expliziter Request-Lifecycle** — jede Interaktion folgt einer validierten State Machine
+- **Escrow-basiertes Settlement** — keine direkten Zahlungswege, alle Outcomes sind gated
+- **Capability-spezifische Verification** — Ergebnisse werden nach Task-Typ bewertet
+- **Policy- und Eligibility-Gates** — nur policy-konforme und gesunde Agenten koennen ausfuehren
+- **Adversarial Invariants** — kritische Garantien sind erzwungen und unter Fehlerbedingungen getestet
+
+Ungueltige Transitionen scheitern. Duplicate Requests werden abgelehnt. Settlement kann Escrow nicht umgehen. Terminale States koennen nicht mutiert werden.
+
+Nexus macht Agent-Interaktionen **zuverlaessig unter adversarial Bedingungen**, nicht nur funktional unter idealen.
 
 ![Nexus Dashboard](docs/dashboard.png)
 
