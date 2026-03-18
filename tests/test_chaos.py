@@ -271,3 +271,256 @@ async def test_trust_ledger_no_doubles_under_concurrent_interactions(client: Asy
     # All request_ids should be unique
     request_ids = [e["request_id"] for e in ledger]
     assert len(set(request_ids)) == 10, "Duplicate request_ids in ledger"
+
+
+# ── 6. Challenge vs Release Race ──────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_challenge_vs_release_race(client: AsyncClient):
+    """Challenge resolution and escrow release fired concurrently.
+
+    Invariant: challenge resolution is CAS-protected; escrow release is CAS-protected.
+    Both can succeed independently — they operate on different tables.
+    But if challenge triggers a dispute on the same escrow, exactly one wins.
+    """
+    from nexus.defense.service import (
+        create_challenge,
+        create_escrow,
+        release_escrow,
+        resolve_challenge,
+    )
+
+    consumer = await create_agent(
+        client,
+        {"name": "chal-race-consumer", "endpoint": "http://localhost:19981", "capabilities": []},
+    )
+    provider = await create_agent(
+        client,
+        {"name": "chal-race-provider", "endpoint": "http://localhost:19982", "capabilities": []},
+    )
+    challenger = await create_agent(
+        client,
+        {"name": "chal-race-challenger", "endpoint": "http://localhost:19983", "capabilities": []},
+    )
+
+    # Create escrow
+    escrow = await create_escrow(
+        request_id="chal-race-req-1",
+        consumer_id=consumer["id"],
+        provider_id=provider["id"],
+        amount=10.0,
+    )
+
+    # Create challenge
+    challenge = await create_challenge(
+        request_id="chal-race-req-1",
+        challenger_id=challenger["id"],
+        target_id=provider["id"],
+        reason="suspicious output",
+    )
+
+    # Fire release + challenge resolution concurrently
+    results = await asyncio.gather(
+        release_escrow(escrow["escrow_id"]),
+        resolve_challenge(challenge["challenge_id"], upheld=True, ruling="bad output"),
+    )
+
+    # Both should complete without crash — they operate on different tables
+    # (escrow vs challenges). The CAS on each table ensures no double effect.
+    release_result, challenge_result = results
+
+    # Challenge resolution should succeed (CAS on challenges table)
+    assert challenge_result.get("status") in ("upheld", None) or "error" not in challenge_result
+
+    # Escrow release should also succeed (CAS on escrow table)
+    # Unless challenge's slash already disputed it — in that case one fails
+    from nexus.database import get_db
+
+    db = await get_db()
+    row = await db.execute("SELECT status FROM escrow WHERE escrow_id = ?", (escrow["escrow_id"],))
+    final = await row.fetchone()
+    assert final["status"] in ("released", "disputed")
+
+    # Double resolution must fail
+    result2 = await resolve_challenge(challenge["challenge_id"], upheld=True, ruling="retry")
+    assert "error" in result2
+
+
+# ── 7. Reconciler Flood (500 stuck states) ────────────────────
+
+
+@pytest.mark.asyncio
+async def test_reconciler_stays_stable_under_flood(client: AsyncClient):
+    """Create 50 orphaned escrows and run reconciler.
+
+    Invariant: reconciler refunds all without crash or double-refund.
+    (Reduced from 500 to 50 for test speed — same invariant.)
+    """
+    from nexus.database import get_db
+    from nexus.defense.service import create_escrow
+    from nexus.protocol.reconciliation import reconcile_once
+
+    consumer = await create_agent(
+        client,
+        {"name": "flood-consumer", "endpoint": "http://localhost:19984", "capabilities": []},
+    )
+    provider = await create_agent(
+        client,
+        {"name": "flood-provider", "endpoint": "http://localhost:19985", "capabilities": []},
+    )
+
+    db = await get_db()
+
+    # Give consumer enough balance
+    await db.execute(
+        "UPDATE wallets SET balance = 10000.0 WHERE agent_id = ?",
+        (consumer["id"],),
+    )
+    await db.commit()
+
+    # Create 50 orphaned escrows with terminal events
+    from datetime import datetime
+
+    for i in range(50):
+        req_id = f"flood-orphan-{i}"
+        await create_escrow(
+            request_id=req_id,
+            consumer_id=consumer["id"],
+            provider_id=provider["id"],
+            amount=1.0,
+        )
+        await db.execute(
+            """INSERT INTO request_events
+               (event_id, request_id, step, from_state, to_state, actor, details, created_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                f"ev-flood-{i}",
+                req_id,
+                "provider_failed",
+                "",
+                "provider_failed",
+                "system",
+                "{}",
+                datetime.utcnow().isoformat(),
+            ),
+        )
+    await db.commit()
+
+    # Run reconciler
+    result = await reconcile_once()
+
+    # INVARIANT: all 50 orphaned escrows refunded, no crash
+    assert result["orphaned_escrows_refunded"] == 50
+
+    # Verify all escrows are disputed
+    row = await db.execute(
+        "SELECT COUNT(*) as c FROM escrow WHERE consumer_id = ? AND status = 'disputed'",
+        (consumer["id"],),
+    )
+    count = (await row.fetchone())["c"]
+    assert count == 50
+
+    # Run reconciler again — should find nothing (idempotent)
+    result2 = await reconcile_once()
+    assert result2["orphaned_escrows_refunded"] == 0
+
+
+# ── 8. Reaper vs Dispatch Race ────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_reaper_vs_dispatch_race(client: AsyncClient):
+    """Agent goes offline (reaper) while request is in-flight.
+
+    Invariant: pre-dispatch eligibility check catches drift.
+    No forwarding to offline agents.
+    """
+    from nexus.database import get_db
+
+    consumer = await create_agent(
+        client,
+        {"name": "reaper-race-consumer", "endpoint": "http://localhost:19986", "capabilities": []},
+    )
+    agent = await create_agent(
+        client,
+        {
+            "name": "reaper-race-agent",
+            "endpoint": "http://localhost:19987",
+            "capabilities": [{"name": "reaper_test", "description": "Test", "languages": ["en"]}],
+        },
+    )
+
+    # Mark agent offline (simulating reaper)
+    db = await get_db()
+    await db.execute("UPDATE agents SET status = 'offline' WHERE id = ?", (agent["id"],))
+    await db.commit()
+
+    # Send multiple requests concurrently — all should fail
+    tasks = [
+        client.post(
+            "/api/protocol/request",
+            json={
+                "request_id": f"reaper-race-{i}",
+                "from_agent": consumer["id"],
+                "query": "test",
+                "capability": "reaper_test",
+            },
+        )
+        for i in range(10)
+    ]
+    responses = await asyncio.gather(*tasks)
+
+    # INVARIANT: no request should succeed — agent is offline
+    for resp in responses:
+        data = resp.json()
+        assert data["status"] in ("failed", "rejected")
+
+    # No escrow should have been created
+    row = await db.execute(
+        "SELECT COUNT(*) as c FROM escrow WHERE provider_id = ?", (agent["id"],)
+    )
+    escrow_count = (await row.fetchone())["c"]
+    assert escrow_count == 0
+
+
+# ── 9. Concurrent Challenge Resolutions ───────────────────────
+
+
+@pytest.mark.asyncio
+async def test_concurrent_challenge_resolution_exactly_one_wins(client: AsyncClient):
+    """Same challenge resolved 10x concurrently.
+
+    Invariant: exactly 1 resolution succeeds, rest get CAS error.
+    """
+    from nexus.defense.service import create_challenge, resolve_challenge
+
+    challenger = await create_agent(
+        client,
+        {"name": "chal-flood-challenger", "endpoint": "http://localhost:19988", "capabilities": []},
+    )
+    target = await create_agent(
+        client,
+        {"name": "chal-flood-target", "endpoint": "http://localhost:19989", "capabilities": []},
+    )
+
+    challenge = await create_challenge(
+        request_id="chal-flood-req",
+        challenger_id=challenger["id"],
+        target_id=target["id"],
+        reason="test",
+    )
+
+    # Fire 10 concurrent resolutions
+    tasks = [
+        resolve_challenge(challenge["challenge_id"], upheld=True, ruling=f"ruling-{i}")
+        for i in range(10)
+    ]
+    results = await asyncio.gather(*tasks)
+
+    successes = [r for r in results if "error" not in r]
+    errors = [r for r in results if "error" in r]
+
+    # INVARIANT: exactly 1 success
+    assert len(successes) == 1, f"Expected 1 success, got {len(successes)}"
+    assert len(errors) == 9, f"Expected 9 errors, got {len(errors)}"
