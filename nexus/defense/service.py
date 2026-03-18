@@ -222,14 +222,25 @@ async def create_escrow(
 
 
 async def release_escrow(escrow_id: str) -> dict:
-    """Release escrowed funds to the provider."""
+    """Release escrowed funds to the provider.
+
+    Uses compare-and-swap: UPDATE WHERE status='held' with rowcount check.
+    This is atomic under SQLite's single-writer model.
+    """
     db = await get_db()
-    row = await db.execute("SELECT * FROM escrow WHERE escrow_id = ? AND status = 'held'", (escrow_id,))
-    escrow = await row.fetchone()
-    if not escrow:
+    now = datetime.utcnow().isoformat()
+
+    # Atomic CAS: only succeeds if status is still 'held'
+    cursor = await db.execute(
+        "UPDATE escrow SET status = 'released', resolved_at = ? WHERE escrow_id = ? AND status = 'held'",
+        (now, escrow_id),
+    )
+    if cursor.rowcount == 0:
         return {"error": "Escrow not found or already resolved"}
 
-    now = datetime.utcnow().isoformat()
+    # Now safe to read the escrow data and apply side effects
+    row = await db.execute("SELECT * FROM escrow WHERE escrow_id = ?", (escrow_id,))
+    escrow = await row.fetchone()
 
     # Credit provider
     await db.execute(
@@ -244,10 +255,6 @@ async def release_escrow(escrow_id: str) -> dict:
         (tx_id, escrow["request_id"], escrow["consumer_id"], escrow["provider_id"], escrow["amount"], now),
     )
 
-    await db.execute(
-        "UPDATE escrow SET status = 'released', resolved_at = ? WHERE escrow_id = ?",
-        (now, escrow_id),
-    )
     await db.commit()
 
     log.info("Escrow %s released: %.4f credits to %s", escrow_id, escrow["amount"], escrow["provider_id"])
@@ -255,14 +262,25 @@ async def release_escrow(escrow_id: str) -> dict:
 
 
 async def dispute_escrow(escrow_id: str, reason: str = "") -> dict:
-    """Consumer disputes escrow — funds returned to consumer."""
+    """Consumer disputes escrow — funds returned to consumer.
+
+    Uses compare-and-swap: UPDATE WHERE status='held' with rowcount check.
+    Mutually exclusive with release_escrow under concurrency.
+    """
     db = await get_db()
-    row = await db.execute("SELECT * FROM escrow WHERE escrow_id = ? AND status = 'held'", (escrow_id,))
-    escrow = await row.fetchone()
-    if not escrow:
+    now = datetime.utcnow().isoformat()
+
+    # Atomic CAS: only succeeds if status is still 'held'
+    cursor = await db.execute(
+        "UPDATE escrow SET status = 'disputed', resolved_at = ? WHERE escrow_id = ? AND status = 'held'",
+        (now, escrow_id),
+    )
+    if cursor.rowcount == 0:
         return {"error": "Escrow not found or already resolved"}
 
-    now = datetime.utcnow().isoformat()
+    # Now safe to read and apply side effects
+    row = await db.execute("SELECT * FROM escrow WHERE escrow_id = ?", (escrow_id,))
+    escrow = await row.fetchone()
 
     # Refund consumer
     await db.execute(
@@ -270,10 +288,6 @@ async def dispute_escrow(escrow_id: str, reason: str = "") -> dict:
         (escrow["amount"], escrow["amount"], now, escrow["consumer_id"]),
     )
 
-    await db.execute(
-        "UPDATE escrow SET status = 'disputed', resolved_at = ? WHERE escrow_id = ?",
-        (now, escrow_id),
-    )
     await db.commit()
 
     # Slash the provider

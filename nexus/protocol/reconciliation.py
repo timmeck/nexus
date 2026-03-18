@@ -83,21 +83,24 @@ async def reconcile_once() -> dict:
                )""",
         )
         orphaned = await rows.fetchall()
-        results["orphaned_escrows_refunded"] = len(orphaned)
+        actually_refunded = 0
 
         for esc in orphaned:
-            # Idempotent: dispute_escrow checks status='held' — won't double-refund
+            # Idempotent: dispute_escrow uses CAS (WHERE status='held') — won't double-refund
             result = await dispute_escrow(
                 esc["escrow_id"],
                 reason=f"Reconciliation: orphaned escrow for failed request {esc['request_id']}",
             )
             if "error" not in result:
+                actually_refunded += 1
                 log.info(
                     "Reconciler refunded orphaned escrow %s (%.4f credits) for request %s",
                     esc["escrow_id"],
                     esc["amount"],
                     esc["request_id"],
                 )
+
+        results["orphaned_escrows_refunded"] = actually_refunded
 
         if orphaned:
             await _audit_reconciliation(
