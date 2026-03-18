@@ -324,7 +324,7 @@ async def test_agent_trust_consistent_with_ledger(client: AsyncClient):
         ("req-a", True, 0.9, False),
         ("req-b", True, 0.8, False),
         ("req-c", False, 0.3, False),
-        ("req-d", True, 0.95, True),   # verified
+        ("req-d", True, 0.95, True),  # verified
         ("req-e", False, 0.2, False),
     ]
 
@@ -388,9 +388,7 @@ async def test_wallet_balance_conservation(client: AsyncClient):
         """Total money = wallet balances + held escrow amounts."""
         row = await db.execute("SELECT COALESCE(SUM(balance), 0) as total FROM wallets")
         wallets = (await row.fetchone())["total"]
-        row = await db.execute(
-            "SELECT COALESCE(SUM(amount), 0) as total FROM escrow WHERE status = 'held'"
-        )
+        row = await db.execute("SELECT COALESCE(SUM(amount), 0) as total FROM escrow WHERE status = 'held'")
         held = (await row.fetchone())["total"]
         return wallets + held
 
@@ -451,9 +449,7 @@ def test_no_forbidden_patterns_in_handler():
     ]
 
     for pattern in forbidden:
-        assert pattern not in source, (
-            f"Forbidden pattern '{pattern}' found in handler — shadow path risk"
-        )
+        assert pattern not in source, f"Forbidden pattern '{pattern}' found in handler — shadow path risk"
 
 
 def test_no_forbidden_patterns_in_router():
@@ -473,6 +469,4 @@ def test_no_forbidden_patterns_in_router():
     ]
 
     for pattern in forbidden:
-        assert pattern not in source, (
-            f"Forbidden pattern '{pattern}' found in router — shadow path risk"
-        )
+        assert pattern not in source, f"Forbidden pattern '{pattern}' found in router — shadow path risk"

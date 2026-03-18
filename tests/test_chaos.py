@@ -477,9 +477,7 @@ async def test_reaper_vs_dispatch_race(client: AsyncClient):
         assert data["status"] in ("failed", "rejected")
 
     # No escrow should have been created
-    row = await db.execute(
-        "SELECT COUNT(*) as c FROM escrow WHERE provider_id = ?", (agent["id"],)
-    )
+    row = await db.execute("SELECT COUNT(*) as c FROM escrow WHERE provider_id = ?", (agent["id"],))
     escrow_count = (await row.fetchone())["c"]
     assert escrow_count == 0
 
@@ -512,10 +510,7 @@ async def test_concurrent_challenge_resolution_exactly_one_wins(client: AsyncCli
     )
 
     # Fire 10 concurrent resolutions
-    tasks = [
-        resolve_challenge(challenge["challenge_id"], upheld=True, ruling=f"ruling-{i}")
-        for i in range(10)
-    ]
+    tasks = [resolve_challenge(challenge["challenge_id"], upheld=True, ruling=f"ruling-{i}") for i in range(10)]
     results = await asyncio.gather(*tasks)
 
     successes = [r for r in results if "error" not in r]

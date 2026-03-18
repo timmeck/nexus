@@ -336,7 +336,16 @@ async def test_crash_during_reconciliation_idempotent_retry(client: AsyncClient)
         """INSERT INTO request_events
            (event_id, request_id, step, from_state, to_state, actor, details, created_at)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-        ("ev-crash6", "crash-edge-6", "provider_failed", "", "provider_failed", "system", "{}", datetime.utcnow().isoformat()),
+        (
+            "ev-crash6",
+            "crash-edge-6",
+            "provider_failed",
+            "",
+            "provider_failed",
+            "system",
+            "{}",
+            datetime.utcnow().isoformat(),
+        ),
     )
     await db.commit()
 

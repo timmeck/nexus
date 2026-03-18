@@ -195,15 +195,11 @@ async def test_replay_within_window_attack(client: AsyncClient):
     db = await get_db()
 
     # No double escrow
-    row = await db.execute(
-        "SELECT COUNT(*) as c FROM escrow WHERE request_id = 'replay-attack-fixed-id'"
-    )
+    row = await db.execute("SELECT COUNT(*) as c FROM escrow WHERE request_id = 'replay-attack-fixed-id'")
     assert (await row.fetchone())["c"] <= 1
 
     # No double trust ledger
-    row = await db.execute(
-        "SELECT COUNT(*) as c FROM trust_ledger WHERE request_id = 'replay-attack-fixed-id'"
-    )
+    row = await db.execute("SELECT COUNT(*) as c FROM trust_ledger WHERE request_id = 'replay-attack-fixed-id'")
     assert (await row.fetchone())["c"] <= 1
 
 
@@ -292,9 +288,7 @@ async def test_eligibility_split_brain_concurrent_requests(client: AsyncClient):
         assert data["status"] in ("failed", "rejected"), f"Request succeeded with offline agent: {data}"
 
     # No escrow created
-    row = await db.execute(
-        "SELECT COUNT(*) as c FROM escrow WHERE provider_id = ?", (agent["id"],)
-    )
+    row = await db.execute("SELECT COUNT(*) as c FROM escrow WHERE provider_id = ?", (agent["id"],))
     assert (await row.fetchone())["c"] == 0
 
 
