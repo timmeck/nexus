@@ -378,15 +378,26 @@ async def create_challenge(
 
 
 async def resolve_challenge(challenge_id: str, upheld: bool, ruling: str = "") -> dict:
-    """Resolve a challenge. If upheld, challenger is rewarded and target is slashed."""
-    db = await get_db()
-    row = await db.execute("SELECT * FROM challenges WHERE challenge_id = ? AND status = 'pending'", (challenge_id,))
-    challenge = await row.fetchone()
-    if not challenge:
-        return {"error": "Challenge not found or already resolved"}
+    """Resolve a challenge. If upheld, challenger is rewarded and target is slashed.
 
+    Uses CAS: UPDATE WHERE status='pending' to prevent double resolution.
+    """
+    db = await get_db()
     now = datetime.utcnow().isoformat()
     reward_paid = 0.0
+    status = "upheld" if upheld else "rejected"
+
+    # Atomic CAS: only succeeds if challenge is still pending
+    cursor = await db.execute(
+        "UPDATE challenges SET status = ?, ruling = ?, reward_paid = ?, resolved_at = ? WHERE challenge_id = ? AND status = 'pending'",
+        (status, ruling, CHALLENGE_REWARD if upheld else 0.0, now, challenge_id),
+    )
+    if cursor.rowcount == 0:
+        return {"error": "Challenge not found or already resolved"}
+
+    # Now safe to read and apply side effects
+    row = await db.execute("SELECT * FROM challenges WHERE challenge_id = ?", (challenge_id,))
+    challenge = await row.fetchone()
 
     if upheld:
         # Slash the target
@@ -404,15 +415,6 @@ async def resolve_challenge(challenge_id: str, upheld: bool, ruling: str = "") -
                 (reward_paid, now, challenge["challenger_id"]),
             )
 
-        status = "upheld"
-    else:
-        # Challenge rejected — fee is kept by the network (burned)
-        status = "rejected"
-
-    await db.execute(
-        "UPDATE challenges SET status = ?, ruling = ?, reward_paid = ?, resolved_at = ? WHERE challenge_id = ?",
-        (status, ruling, reward_paid, now, challenge_id),
-    )
     await db.commit()
 
     log.info("Challenge %s %s: %s", challenge_id, status, ruling)
