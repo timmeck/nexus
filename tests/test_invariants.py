@@ -508,3 +508,138 @@ async def test_escrow_dispute_after_release_blocked(client: AsyncClient):
     # Dispute after release — must fail
     dispute_result = await dispute_escrow(escrow["escrow_id"], reason="too late")
     assert "error" in dispute_result
+
+
+# ── 9. Terminal state guards ─────────────────────────────────
+
+
+def test_state_machine_terminal_blocks_all_mutations():
+    """Once in a terminal state, NO further transitions allowed.
+
+    Tests every terminal state: POLICY_REJECTED, FUNDS_INSUFFICIENT,
+    NO_ROUTE, SETTLED, FAILED, ERROR.
+    """
+    from nexus.protocol.state_machine import (
+        TERMINAL_STATES,
+        InvalidTransitionError,
+        RequestLifecycle,
+        RequestState,
+    )
+
+    # Every non-terminal target state
+    all_states = list(RequestState)
+
+    for terminal in TERMINAL_STATES:
+        for target in all_states:
+            if target == terminal:
+                continue
+            # Build a lifecycle that reaches this terminal state
+            lc = RequestLifecycle(f"terminal-test-{terminal}-{target}")
+
+            # Force state to terminal (for testing only)
+            lc.state = terminal
+
+            with pytest.raises(InvalidTransitionError):
+                lc.transition(target)
+
+
+def test_state_machine_settled_cannot_be_refunded():
+    """After SETTLED, no REFUNDED or FAILED can follow.
+
+    This is the core economic invariant: settled money stays settled.
+    """
+    from nexus.protocol.state_machine import (
+        InvalidTransitionError,
+        RequestLifecycle,
+        RequestState,
+    )
+
+    lc = RequestLifecycle("settled-final")
+    lc.transition(RequestState.POLICY_APPROVED)
+    lc.transition(RequestState.ROUTED)
+    lc.transition(RequestState.BUDGET_CHECKED)
+    lc.transition(RequestState.FORWARDING)
+    lc.transition(RequestState.RESPONSE_RECEIVED)
+    lc.transition(RequestState.TRUST_RECORDED)
+    lc.transition(RequestState.SETTLED)
+
+    # Nothing should be possible after SETTLED
+    with pytest.raises(InvalidTransitionError):
+        lc.transition(RequestState.FAILED)
+
+    with pytest.raises(InvalidTransitionError):
+        lc.transition(RequestState.ESCROWED)
+
+    with pytest.raises(InvalidTransitionError):
+        lc.transition(RequestState.RECEIVED)
+
+
+# ── 10. Trust ledger delta idempotency ───────────────────────
+
+
+@pytest.mark.asyncio
+async def test_trust_ledger_records_exact_deltas(client: AsyncClient):
+    """Each interaction creates exactly one trust ledger entry.
+
+    No duplicate deltas, no missing entries.
+    """
+    agent = await create_agent(
+        client,
+        {
+            "name": "ledger-test-agent",
+            "endpoint": "http://localhost:19880",
+            "capabilities": [],
+        },
+    )
+    agent_id = agent["id"]
+
+    from nexus.trust.service import record_interaction
+
+    # Record 3 interactions
+    await record_interaction(
+        request_id="ledger-1",
+        consumer_id="c1",
+        provider_id=agent_id,
+        success=True,
+        confidence=0.9,
+        cost=1.0,
+        response_ms=100,
+    )
+    await record_interaction(
+        request_id="ledger-2",
+        consumer_id="c2",
+        provider_id=agent_id,
+        success=False,
+        confidence=0.3,
+        cost=0.5,
+        response_ms=200,
+    )
+    await record_interaction(
+        request_id="ledger-3",
+        consumer_id="c3",
+        provider_id=agent_id,
+        success=True,
+        confidence=0.95,
+        verified=True,
+        cost=2.0,
+        response_ms=150,
+    )
+
+    # Check ledger has exactly 3 entries
+    resp = await client.get(f"/api/trust/ledger/{agent_id}")
+    ledger = resp.json()
+    assert len(ledger) == 3
+
+    # Each entry has required fields
+    for entry in ledger:
+        assert "delta" in entry
+        assert "reason" in entry
+        assert "trust_before" in entry
+        assert "trust_after" in entry
+        assert "request_id" in entry
+
+    # Verify reasons match
+    reasons = {e["request_id"]: e["reason"] for e in ledger}
+    assert reasons["ledger-1"] == "success"
+    assert reasons["ledger-2"] == "failure"
+    assert reasons["ledger-3"] == "verified_success"
