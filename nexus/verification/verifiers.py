@@ -425,11 +425,21 @@ def extract_claims(text: str) -> dict[str, list[str]]:
                     if year:
                         claims["date"].append(f"{year}-{month_num}-{str(ord_val).zfill(2)}")
 
-    # Numbers: extract quantities with context (e.g. "35 million", "81")
-    for m in re.finditer(r"(\d+(?:\.\d+)?)\s*(million|billion|thousand|hundred)?", lower):
+    # Numbers: extract quantities with context (e.g. "35 million", "35M", "81")
+    # Use word boundary at start to avoid partial matches inside compounds like "24mo"
+    abbreviations = {"m": "million", "b": "billion", "k": "thousand", "bn": "billion"}
+    multipliers = {"million": 1_000_000, "billion": 1_000_000_000, "thousand": 1_000, "hundred": 100}
+
+    # First handle "Xmo" as time periods (24mo = 24 months)
+    for m in re.finditer(r"(\d+)\s*mo\b", lower):
+        claims["number"].append(f"{m.group(1)}_month")
+
+    for m in re.finditer(
+        r"(?<![a-z])(\d+(?:\.\d+)?)\s*(million|billion|thousand|hundred|m|b|k|bn)?(?![a-z0-9])", lower
+    ):
         value = float(m.group(1))
         unit = m.group(2) or ""
-        multipliers = {"million": 1_000_000, "billion": 1_000_000_000, "thousand": 1_000, "hundred": 100}
+        unit = abbreviations.get(unit, unit)  # normalize abbreviations
         if unit in multipliers:
             value *= multipliers[unit]
         claims["number"].append(str(int(value)))
@@ -465,12 +475,23 @@ def extract_claims(text: str) -> dict[str, list[str]]:
         "november": "11",
         "december": "12",
     }
+    # "March 15, 2025" or "March 15 2025"
     for m in re.finditer(
         r"(january|february|march|april|may|june|july|august|september|october|november|december)\s+(\d{1,2}),?\s+(\d{4})",
         lower,
     ):
         month = months[m.group(1)]
         day = m.group(2).zfill(2)
+        year = m.group(3)
+        claims["date"].append(f"{year}-{month}-{day}")
+
+    # "15 March 2025" (European-style: day month year)
+    for m in re.finditer(
+        r"(\d{1,2})\s+(january|february|march|april|may|june|july|august|september|october|november|december)\s+(\d{4})",
+        lower,
+    ):
+        day = m.group(1).zfill(2)
+        month = months[m.group(2)]
         year = m.group(3)
         claims["date"].append(f"{year}-{month}-{day}")
 
@@ -486,46 +507,32 @@ def extract_claims(text: str) -> dict[str, list[str]]:
     for m in re.finditer(r"(\d+)\s+(months?|years?|weeks?|days?)", lower):
         claims["number"].append(f"{m.group(1)}_{m.group(2).rstrip('s')}")
 
-    # Jurisdictions / entities
-    jurisdictions = [
-        "european union",
-        "eu",
-        "united states",
-        "us",
-        "usa",
-        "united kingdom",
-        "uk",
-        "china",
-        "japan",
-        "india",
-        "european commission",
-    ]
-    for j in jurisdictions:
-        if j in lower:
-            # Normalize
-            if j in ("european union", "eu"):
-                claims["jurisdiction"].append("EU")
-            elif j in ("united states", "us", "usa"):
-                claims["jurisdiction"].append("US")
-            elif j in ("united kingdom", "uk"):
-                claims["jurisdiction"].append("UK")
-            elif j == "european commission":
-                claims["jurisdiction"].append("EU_COMMISSION")
-            else:
-                claims["jurisdiction"].append(j.upper())
-
-    # Named entities (organizations, acts)
-    entity_patterns = [
-        r"ai\s+act",
-        r"ai\s+safety\s+act",
-        r"ai\s+governance",
-        r"conformity\s+assessments?",
-        r"safety\s+evaluations?",
-        r"mandatory\s+registration",
-    ]
-    for pattern in entity_patterns:
+    # Jurisdictions / entities — use word boundaries to avoid false matches
+    # ("us" in "discusses", "eu" in "evaluated", etc.)
+    jurisdiction_patterns = {
+        r"\beuropean\s+union\b": "EU",
+        r"\bthe\s+eu\b|\beu\s+": "EU",  # "the EU" or "EU " (with space after)
+        r"\bunited\s+states\b": "US",
+        r"\bthe\s+us\b|\bus\s+government\b|\bus\s+announced\b": "US",
+        r"\busa\b": "US",
+        r"\bunited\s+kingdom\b": "UK",
+        r"\bthe\s+uk\b|\buk\s+": "UK",
+        r"\beuropean\s+commission\b": "EU_COMMISSION",
+    }
+    for pattern, normalized in jurisdiction_patterns.items():
         if re.search(pattern, lower):
-            claims["entity"].append(re.sub(r"\s+", "_", pattern.replace(r"\s+", " ").replace("s?", "")))
+            claims["jurisdiction"].append(normalized)
+
+    # Named entities (organizations, acts) — only extract high-level entities,
+    # not minor phrasing variations that differ between honest agents
+    entity_patterns = [
+        (r"ai\s+act", "ai_act"),
+        (r"ai\s+safety\s+act", "ai_safety_act"),
+        (r"ai\s+governance", "ai_governance"),
+    ]
+    for pattern, label in entity_patterns:
+        if re.search(pattern, lower):
+            claims["entity"].append(label)
 
     # Deduplicate within each category
     for key in claims:
@@ -636,8 +643,11 @@ def verify_claims(
                     details.append(f"{name_j} has {diff_j}")
                 contradictions.append(f"[{category}] {name_i} vs {name_j}: {', '.join(details)}")
 
-                # Mark critical mismatches
-                if category in CRITICAL_CLAIM_TYPES and avg_jaccard < 0.8:
+                # Mark critical mismatches — but only if agents actively
+                # CONTRADICT each other (both have values, values differ),
+                # not just if one has extra detail the other omits.
+                if category in CRITICAL_CLAIM_TYPES and diff_i and diff_j:
+                    # Both agents have values the other doesn't — real conflict
                     critical_mismatch = True
 
     # Calculate weighted score

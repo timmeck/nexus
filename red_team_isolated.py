@@ -159,6 +159,86 @@ def _honest_answer(req: AgentRequest, name: str, variation: int = 0) -> AgentRes
     )
 
 
+def _honest_verbose(req: AgentRequest, name: str) -> AgentResponse:
+    """Honest agent with very different, verbose style. Same facts."""
+    text = req.query
+    parts = text.split("\n\n", 1)
+    analyze_text = parts[1] if len(parts) > 1 else text
+    words = analyze_text.split()
+
+    answer = (
+        f"I've completed a thorough analysis of the provided text. "
+        f"Here are the key metrics: the text contains {len(words)} words "
+        f"spread across {len(analyze_text)} characters in approximately 5 sentences. "
+        f"The content discusses the European Union's AI Act, announced on March 15, 2025. "
+        f"Key takeaway: companies face a 24-month compliance window, with penalties "
+        f"reaching 35 million euros or 7% of global annual turnover for non-compliance."
+    )
+
+    return AgentResponse(
+        request_id=req.request_id,
+        from_agent=name,
+        to_agent=req.from_agent,
+        answer=answer,
+        confidence=0.82,
+        cost=0.05,
+        processing_ms=200,
+    )
+
+
+def _honest_minimal(req: AgentRequest, name: str) -> AgentResponse:
+    """Honest agent with ultra-minimal style. Same facts, fewer words."""
+    text = req.query
+    parts = text.split("\n\n", 1)
+    analyze_text = parts[1] if len(parts) > 1 else text
+    words = analyze_text.split()
+
+    answer = (
+        f"Words: {len(words)}. Chars: {len(analyze_text)}. Sentences: 5. "
+        f"EU AI Act (March 15, 2025): conformity assessments required. "
+        f"24mo deadline. Penalty: EUR 35M / 7% turnover."
+    )
+
+    return AgentResponse(
+        request_id=req.request_id,
+        from_agent=name,
+        to_agent=req.from_agent,
+        answer=answer,
+        confidence=0.91,
+        cost=0.05,
+        processing_ms=60,
+    )
+
+
+def _honest_german_style(req: AgentRequest, name: str) -> AgentResponse:
+    """Honest agent answering in English but with different terminology. Same facts."""
+    text = req.query
+    parts = text.split("\n\n", 1)
+    analyze_text = parts[1] if len(parts) > 1 else text
+    words = analyze_text.split()
+
+    answer = (
+        f"Text evaluation:\n"
+        f"  Word total: {len(words)}\n"
+        f"  Character total: {len(analyze_text)}\n"
+        f"  Number of sentences: 5\n"
+        f"  Overview: The European Union published the AI Act regulation "
+        f"on 15 March 2025. High-risk AI systems must pass conformity "
+        f"assessments. The compliance period is 24 months. Maximum fine: "
+        f"35 million euros or 7 percent of worldwide annual revenue."
+    )
+
+    return AgentResponse(
+        request_id=req.request_id,
+        from_agent=name,
+        to_agent=req.from_agent,
+        answer=answer,
+        confidence=0.84,
+        cost=0.05,
+        processing_ms=170,
+    )
+
+
 def make_app(name: str, handler_fn) -> FastAPI:
     app = FastAPI(title=name)
 
@@ -423,6 +503,9 @@ def _build_app(agent_type: str, agent_name: str) -> FastAPI:
     handlers = {
         "honest-0": lambda r: _honest_answer(r, agent_name, 0),
         "honest-1": lambda r: _honest_answer(r, agent_name, 1),
+        "honest-verbose": lambda r: _honest_verbose(r, agent_name),
+        "honest-minimal": lambda r: _honest_minimal(r, agent_name),
+        "honest-german": lambda r: _honest_german_style(r, agent_name),
         "dumb-liar": dumb_liar_handler,
         "plausible-liar": plausible_liar_handler,
         "partial-cheater": partial_cheater_handler,
@@ -641,6 +724,50 @@ TESTS = [
         "cheaters": ["colluder-v2-1", "colluder-v2-2"],
         "expected_verdict": "fail",
     },
+    # ── FALSE POSITIVE TESTS ──────────────────────────────────
+    # Honest agents with very different styles. Must NOT be flagged.
+    {
+        "name": "FP: Verbose vs Standard",
+        "desc": "Same facts, very different writing style (verbose prose vs structured)",
+        "agents": [
+            ("honest-1", 9801, "honest-0"),
+            ("honest-verbose", 9802, "honest-verbose"),
+        ],
+        "cheaters": [],
+        "expected_verdict": "pass",
+    },
+    {
+        "name": "FP: Minimal vs Standard",
+        "desc": "Same facts, ultra-short telegraphic style (EUR 35M / 7%)",
+        "agents": [
+            ("honest-1", 9801, "honest-0"),
+            ("honest-minimal", 9802, "honest-minimal"),
+        ],
+        "cheaters": [],
+        "expected_verdict": "pass",
+    },
+    {
+        "name": "FP: All 4 Honest Styles",
+        "desc": "4 honest agents, all different styles, same facts. Must all agree.",
+        "agents": [
+            ("honest-1", 9801, "honest-0"),
+            ("honest-2", 9802, "honest-1"),
+            ("honest-verbose", 9803, "honest-verbose"),
+            ("honest-minimal", 9804, "honest-minimal"),
+        ],
+        "cheaters": [],
+        "expected_verdict": "pass",
+    },
+    {
+        "name": "FP: German-style vs Standard",
+        "desc": "Different terminology (Word total, Overview, 15 March 2025), same facts",
+        "agents": [
+            ("honest-1", 9801, "honest-0"),
+            ("honest-german", 9802, "honest-german"),
+        ],
+        "cheaters": [],
+        "expected_verdict": "pass",
+    },
 ]
 
 
@@ -780,7 +907,7 @@ async def run_single_test(test: dict, test_num: int, total: int) -> dict:
 async def run_all():
     banner("NEXUS RED TEAM v2 -- Isolated Tests")
     print(f"  {DIM}Each test runs with fresh Nexus + only the relevant agents.{RESET}")
-    print(f"  {DIM}12 tests: 1 baseline + 8 v2 cheaters + 3 v3 adversarial patterns.{RESET}")
+    print(f"  {DIM}16 tests: 1 baseline + 11 cheaters + 4 false-positive tests.{RESET}")
 
     results = []
 
