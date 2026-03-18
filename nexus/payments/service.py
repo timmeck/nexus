@@ -128,10 +128,18 @@ async def process_payment(
     amount: float,
     description: str = "",
 ) -> dict:
-    """Process a payment from consumer to provider.
+    """DEPRECATED: Direct payment is forbidden. Use defense.create_escrow() instead.
 
-    Returns {"success": bool, "tx_id": str, ...}
+    All settlement must go through the escrow lifecycle.
+    This function exists only for backward compatibility testing.
     """
+    import warnings
+
+    warnings.warn(
+        "process_payment() is deprecated. Use escrow-based settlement instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     db = await get_db()
     now = datetime.utcnow().isoformat()
 

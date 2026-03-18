@@ -643,3 +643,56 @@ async def test_trust_ledger_records_exact_deltas(client: AsyncClient):
     assert reasons["ledger-1"] == "success"
     assert reasons["ledger-2"] == "failure"
     assert reasons["ledger-3"] == "verified_success"
+
+
+# ── 11. process_payment is deprecated ────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_process_payment_emits_deprecation_warning(client: AsyncClient):
+    """Calling process_payment() must emit a DeprecationWarning.
+
+    The function still works for backward compatibility but warns loudly.
+    """
+    import warnings
+
+    from nexus.payments.service import process_payment
+
+    consumer = await create_agent(
+        client,
+        {"name": "dep-consumer", "endpoint": "http://localhost:19890", "capabilities": []},
+    )
+    provider = await create_agent(
+        client,
+        {"name": "dep-provider", "endpoint": "http://localhost:19891", "capabilities": []},
+    )
+
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
+        await process_payment(
+            request_id="dep-test",
+            consumer_id=consumer["id"],
+            provider_id=provider["id"],
+            amount=1.0,
+        )
+        assert len(w) >= 1
+        assert issubclass(w[0].category, DeprecationWarning)
+        assert "deprecated" in str(w[0].message).lower()
+
+
+# ── 12. No direct state writes outside state machine ─────────
+
+
+def test_no_direct_state_writes_in_handler():
+    """Handler code must not contain direct .state = assignments.
+
+    Only state_machine.py is allowed to mutate state.
+    """
+    import inspect
+
+    from nexus.protocol import handler
+
+    source = inspect.getsource(handler)
+    # .state = should not appear in handler (only lifecycle.transition())
+    direct_writes = source.count(".state =")
+    assert direct_writes == 0, f"Found {direct_writes} direct .state = writes in handler — must be 0"
