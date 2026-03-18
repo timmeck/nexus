@@ -175,11 +175,11 @@ Nexus makes incorrect behavior **harder, more visible, and less profitable** tha
 
 ## Testing
 
-198 tests + adversarial red team suite:
+224 tests + adversarial red team suite:
 
 ```bash
 # Unit + integration tests
-pytest -v               # 198 passed
+pytest -v               # 224 passed
 
 # Killer demo
 python demo_cheat.py    # Cheater caught in 60 seconds
