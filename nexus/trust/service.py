@@ -81,13 +81,13 @@ async def record_interaction(
 
     trust_after = max(MIN_TRUST, min(MAX_TRUST, trust_before + delta))
 
-    # Record in trust ledger (append-only)
+    # Record in trust ledger (append-only, idempotent per agent+request)
     reason = "success" if success else "failure"
     if verified and success and confidence > 0.8:
         reason = "verified_success"
     ledger_id = uuid.uuid4().hex[:12]
     await db.execute(
-        """INSERT INTO trust_ledger
+        """INSERT OR IGNORE INTO trust_ledger
            (entry_id, agent_id, request_id, delta, reason, trust_before, trust_after, created_at)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
         (ledger_id, provider_id, request_id, delta, reason, trust_before, trust_after, now),

@@ -73,6 +73,7 @@ CREATE TABLE IF NOT EXISTS trust_ledger (
     created_at   TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_trust_ledger_agent ON trust_ledger(agent_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_trust_ledger_idempotent ON trust_ledger(agent_id, request_id);
 
 CREATE TABLE IF NOT EXISTS request_events (
     event_id     TEXT PRIMARY KEY,

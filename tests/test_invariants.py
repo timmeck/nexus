@@ -727,6 +727,49 @@ def test_no_select_then_update_on_escrow_status():
             assert cas_pos < select_pos, f"{func_name}: SELECT comes before CAS UPDATE — forbidden pattern"
 
 
+@pytest.mark.asyncio
+async def test_trust_ledger_idempotent_under_duplicate_callback(client: AsyncClient):
+    """Same request_id recorded twice must produce exactly 1 ledger entry.
+
+    This is Fehlerklasse #2: Idempotenz-Brüche.
+    CAS prevents double finalization, but doesn't prevent double side effects.
+    The UNIQUE(agent_id, request_id) constraint on trust_ledger does.
+    """
+    from nexus.trust.service import record_interaction
+
+    agent = await create_agent(
+        client,
+        {"name": "idemp-ledger-agent", "endpoint": "http://localhost:19990", "capabilities": []},
+    )
+    agent_id = agent["id"]
+
+    # Record same interaction twice (simulating duplicate callback)
+    await record_interaction(
+        request_id="duplicate-callback-1",
+        consumer_id="c1",
+        provider_id=agent_id,
+        success=True,
+        confidence=0.9,
+        cost=1.0,
+        response_ms=100,
+    )
+    await record_interaction(
+        request_id="duplicate-callback-1",
+        consumer_id="c1",
+        provider_id=agent_id,
+        success=True,
+        confidence=0.9,
+        cost=1.0,
+        response_ms=100,
+    )
+
+    # Check ledger: must have exactly 1 entry for this request
+    resp = await client.get(f"/api/trust/ledger/{agent_id}")
+    ledger = resp.json()
+    matching = [e for e in ledger if e["request_id"] == "duplicate-callback-1"]
+    assert len(matching) == 1, f"Expected 1 ledger entry, got {len(matching)} — idempotency broken"
+
+
 def test_no_select_then_update_on_challenge_status():
     """Challenge resolution must use CAS pattern."""
     import inspect
