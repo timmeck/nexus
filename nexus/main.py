@@ -51,8 +51,13 @@ async def lifespan(app: FastAPI):
 
     reaper_task = asyncio.create_task(reaper_loop())
     log.info("Liveness reaper started.")
+    from nexus.protocol.reconciliation import reconciliation_loop
+
+    reconciliation_task = asyncio.create_task(reconciliation_loop())
+    log.info("Reconciliation job started.")
     yield
     reaper_task.cancel()
+    reconciliation_task.cancel()
     await close_db()
     log.info("Nexus shut down.")
 

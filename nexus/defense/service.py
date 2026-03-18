@@ -69,6 +69,8 @@ CREATE TABLE IF NOT EXISTS slashing_log (
     created_at   TEXT NOT NULL
 );
 
+CREATE UNIQUE INDEX IF NOT EXISTS idx_escrow_request ON escrow(request_id)
+    WHERE status = 'held';
 CREATE INDEX IF NOT EXISTS idx_escrow_status ON escrow(status);
 CREATE INDEX IF NOT EXISTS idx_escrow_release ON escrow(release_at);
 CREATE INDEX IF NOT EXISTS idx_challenges_status ON challenges(status);
