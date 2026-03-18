@@ -302,22 +302,27 @@ def _words_to_number(text: str) -> list[tuple[str, int]]:
             i += 1
             continue
 
-        # Start accumulating a number
+        # Start accumulating a number — require at least one number word
+        # before accepting multipliers (prevents "million" alone -> 1000000)
         current = 0
         total = 0
+        has_number_word = False
         while i < len(words):
             w = words[i]
             if w in WORD_NUMBERS:
                 current += WORD_NUMBERS[w]
+                has_number_word = True
                 i += 1
-            elif w in WORD_MULTIPLIERS:
-                if current == 0:
-                    current = 1
+            elif w in WORD_MULTIPLIERS and (has_number_word or current > 0):
                 current *= WORD_MULTIPLIERS[w]
                 if WORD_MULTIPLIERS[w] >= 1000:
                     total += current
                     current = 0
                 i += 1
+            elif w in WORD_MULTIPLIERS:
+                # Standalone multiplier without number word — skip
+                i += 1
+                break
             else:
                 break
 
@@ -430,18 +435,28 @@ def extract_claims(text: str) -> dict[str, list[str]]:
     abbreviations = {"m": "million", "b": "billion", "k": "thousand", "bn": "billion"}
     multipliers = {"million": 1_000_000, "billion": 1_000_000_000, "thousand": 1_000, "hundred": 100}
 
-    # First handle "Xmo" as time periods (24mo = 24 months)
+    # First handle time periods: "24 months", "24-month", "24mo"
+    time_period_numbers: set[str] = set()  # track to avoid double-extraction
     for m in re.finditer(r"(\d+)\s*mo\b", lower):
         claims["number"].append(f"{m.group(1)}_month")
+        time_period_numbers.add(m.group(1))
+    for m in re.finditer(r"(\d+)[\s-]+(months?|years?|weeks?|days?)", lower):
+        claims["number"].append(f"{m.group(1)}_{m.group(2).rstrip('s')}")
+        time_period_numbers.add(m.group(1))
 
     for m in re.finditer(
         r"(?<![a-z])(\d+(?:\.\d+)?)\s*(million|billion|thousand|hundred|m|b|k|bn)?(?![a-z0-9])", lower
     ):
         value = float(m.group(1))
+        raw_num = m.group(1).split(".")[0]
         unit = m.group(2) or ""
         unit = abbreviations.get(unit, unit)  # normalize abbreviations
         if unit in multipliers:
             value *= multipliers[unit]
+        else:
+            # Skip numbers already captured as time periods
+            if raw_num in time_period_numbers:
+                continue
         claims["number"].append(str(int(value)))
 
     # Currencies
@@ -503,9 +518,7 @@ def extract_claims(text: str) -> dict[str, list[str]]:
         year = m.group(2)
         claims["date"].append(f"{year}-{month}")
 
-    # Time periods (e.g. "24 months", "18 months")
-    for m in re.finditer(r"(\d+)\s+(months?|years?|weeks?|days?)", lower):
-        claims["number"].append(f"{m.group(1)}_{m.group(2).rstrip('s')}")
+    # Time periods already extracted above (before number extraction)
 
     # Jurisdictions / entities — use word boundaries to avoid false matches
     # ("us" in "discusses", "eu" in "evaluated", etc.)
