@@ -1,6 +1,6 @@
 # Nexus
 
-**AI-zu-AI-Protokollschicht** | 9 Schichten | 15 Features | 161 Tests
+**AI-zu-AI-Protokollschicht** | 9 Schichten | 15 Features | 166 Tests
 
 [![CI](https://github.com/timmeck/nexus/actions/workflows/ci.yml/badge.svg)](https://github.com/timmeck/nexus/actions/workflows/ci.yml)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/downloads/)
