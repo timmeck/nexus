@@ -1,6 +1,6 @@
 # Nexus
 
-**AI-to-AI Protocol Layer** | 9 Layers | 15 Features | 169 Tests
+**AI-to-AI Protocol Layer** | 9 Layers | 15 Features | 198 Tests
 
 [![CI](https://github.com/timmeck/nexus/actions/workflows/ci.yml/badge.svg)](https://github.com/timmeck/nexus/actions/workflows/ci.yml)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/downloads/)
@@ -129,7 +129,36 @@ Registers Cortex, DocBrain, Mnemonic, DeepResearch, Sentinel, CostControl, Safet
 | **SafetyProxy** | 8700 | prompt_injection_detection, pii_detection |
 | **LogAnalyst** | 8800 | log_analysis, error_explanation |
 
-All products expose a `/nexus/handle` endpoint for direct protocol communication.
+All products use the **NexusAdapter SDK** — HMAC signature verification, automatic heartbeats (30s), and auto-registration with Nexus on startup. See [Agent Integration](#agent-integration) below.
+
+## Agent Integration
+
+Any FastAPI agent can join the Nexus network by copying `nexus/sdk_standalone.py` (zero dependencies on the nexus package):
+
+```python
+from nexus_sdk import NexusAdapter
+
+adapter = NexusAdapter(
+    app=app,
+    agent_name="my-agent",
+    nexus_url="http://localhost:9500",
+    endpoint="http://localhost:8000",
+    capabilities=[
+        {"name": "summarization", "description": "Summarizes text", "price_per_request": 0.01},
+    ],
+)
+
+@adapter.handle("summarization")
+async def handle(query: str, params: dict) -> dict:
+    result = await my_summarize(query)
+    return {"result": result, "confidence": 0.9, "cost": 0.01}
+```
+
+The adapter automatically:
+- Registers with Nexus on startup
+- Sends heartbeats every 30s (keeps agent "online")
+- Verifies HMAC signatures on incoming requests (3-layer replay protection)
+- Handles request/response serialization
 
 ## How It Works
 
@@ -326,11 +355,25 @@ python agents/register_existing.py
 docker compose up -d
 ```
 
-## Testing
+## Integrity Testing
+
+198 tests across 7 categories — not just correctness, but adversarial hardening:
+
+| Category | Tests | What it proves |
+|----------|-------|---------------|
+| Core protocol | ~50 | Lifecycle, state machine, routing, policy, trust |
+| Adversarial invariants | 26 | CAS enforcement, terminal guards, shadow path blocks |
+| Chaos/Load | 9 | Retry storms, budget contention, reconciler flood, races |
+| Red Team Attacks | 8 | Ghost release, replay, payload swap, trust farming |
+| Crash Injection | 7 | Partial completion at 7 lifecycle edges |
+| Cross-Object Consistency | 9 | Illegal state detection, wallet conservation |
+| Verification & Schemas | ~20 | Multi-agent verification, capability schemas |
+
+28 formal invariants documented in [`docs/invariants.md`](docs/invariants.md).
 
 ```bash
 pytest -v
-# 169 passed
+# 198 passed
 ```
 
 ## Tech Stack
