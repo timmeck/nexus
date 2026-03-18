@@ -696,3 +696,93 @@ def test_no_direct_state_writes_in_handler():
     # .state = should not appear in handler (only lifecycle.transition())
     direct_writes = source.count(".state =")
     assert direct_writes == 0, f"Found {direct_writes} direct .state = writes in handler — must be 0"
+
+
+# ── 13. NX-310: Pre-dispatch drift per eligibility dimension ──
+
+
+@pytest.mark.asyncio
+async def test_drift_agent_goes_offline_before_dispatch(client: AsyncClient):
+    """Agent marked offline between routing and dispatch → request fails."""
+    from nexus.database import get_db
+
+    consumer = await create_agent(
+        client,
+        {"name": "drift-off-consumer", "endpoint": "http://localhost:19892", "capabilities": []},
+    )
+    agent = await create_agent(
+        client,
+        {
+            "name": "drift-off-agent",
+            "endpoint": "http://localhost:19893",
+            "capabilities": [{"name": "drift_off", "description": "Test", "languages": ["en"]}],
+        },
+    )
+
+    db = await get_db()
+    await db.execute("UPDATE agents SET status = 'offline' WHERE id = ?", (agent["id"],))
+    await db.commit()
+
+    resp = await client.post(
+        "/api/protocol/request",
+        json={"from_agent": consumer["id"], "query": "test", "capability": "drift_off"},
+    )
+    assert resp.json()["status"] in ("failed", "rejected")
+
+
+@pytest.mark.asyncio
+async def test_drift_agent_trust_drops_below_threshold(client: AsyncClient):
+    """Agent trust drops below eligibility threshold → not routed."""
+    from nexus.database import get_db
+
+    consumer = await create_agent(
+        client,
+        {"name": "drift-trust-consumer", "endpoint": "http://localhost:19894", "capabilities": []},
+    )
+    agent = await create_agent(
+        client,
+        {
+            "name": "drift-trust-agent",
+            "endpoint": "http://localhost:19895",
+            "capabilities": [{"name": "drift_trust", "description": "Test", "languages": ["en"]}],
+        },
+    )
+
+    db = await get_db()
+    await db.execute("UPDATE agents SET trust_score = 0.05 WHERE id = ?", (agent["id"],))
+    await db.commit()
+
+    resp = await client.post(
+        "/api/protocol/request",
+        json={"from_agent": consumer["id"], "query": "test", "capability": "drift_trust"},
+    )
+    assert resp.json()["status"] in ("failed", "rejected")
+
+
+@pytest.mark.asyncio
+async def test_drift_agent_marked_suspect(client: AsyncClient):
+    """Agent with status 'suspect' (stale heartbeat) → not eligible."""
+    from nexus.database import get_db
+
+    consumer = await create_agent(
+        client,
+        {"name": "drift-suspect-consumer", "endpoint": "http://localhost:19896", "capabilities": []},
+    )
+    agent = await create_agent(
+        client,
+        {
+            "name": "drift-suspect-agent",
+            "endpoint": "http://localhost:19897",
+            "capabilities": [{"name": "drift_suspect", "description": "Test", "languages": ["en"]}],
+        },
+    )
+
+    db = await get_db()
+    await db.execute("UPDATE agents SET status = 'suspect' WHERE id = ?", (agent["id"],))
+    await db.commit()
+
+    resp = await client.post(
+        "/api/protocol/request",
+        json={"from_agent": consumer["id"], "query": "test", "capability": "drift_suspect"},
+    )
+    assert resp.json()["status"] in ("failed", "rejected")

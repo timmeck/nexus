@@ -89,3 +89,33 @@ class TestHmacSigning:
         # Second use — same signature, must fail
         valid2 = verify_signature(payload, key, headers["X-Nexus-Timestamp"], headers["X-Nexus-Signature"])
         assert valid2 is False
+
+    def test_same_timestamp_different_payload_rejected(self):
+        """Same timestamp + key but different payload must produce different signature.
+
+        This tests that payload is properly bound to the signature scope.
+        """
+        from nexus.auth import _replay_cache
+
+        _replay_cache.clear()
+
+        key = generate_api_key()
+        ts = int(time.time())
+
+        headers1 = sign_request('{"query": "original"}', key, timestamp=ts)
+        headers2 = sign_request('{"query": "tampered"}', key, timestamp=ts)
+
+        # Signatures must be different (payload binding)
+        assert headers1["X-Nexus-Signature"] != headers2["X-Nexus-Signature"]
+
+        # First passes
+        valid1 = verify_signature('{"query": "original"}', key, str(ts), headers1["X-Nexus-Signature"])
+        assert valid1 is True
+
+        # Second with different payload also passes (different signature)
+        valid2 = verify_signature('{"query": "tampered"}', key, str(ts), headers2["X-Nexus-Signature"])
+        assert valid2 is True
+
+        # But replaying first signature with second payload fails (tampered)
+        valid3 = verify_signature('{"query": "tampered"}', key, str(ts), headers1["X-Nexus-Signature"])
+        assert valid3 is False
