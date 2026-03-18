@@ -1,6 +1,6 @@
 # Nexus
 
-**AI-to-AI Protocol Layer** | 9 Layers | 15 Features | 149 Tests
+**AI-to-AI Protocol Layer** | 9 Layers | 15 Features | 152 Tests
 
 [![CI](https://github.com/timmeck/nexus/actions/workflows/ci.yml/badge.svg)](https://github.com/timmeck/nexus/actions/workflows/ci.yml)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/downloads/)
@@ -311,7 +311,7 @@ docker compose up -d
 
 ```bash
 pytest -v
-# 149 passed
+# 152 passed
 ```
 
 ## Tech Stack
