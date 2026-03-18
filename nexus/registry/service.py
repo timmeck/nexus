@@ -182,13 +182,33 @@ async def heartbeat(agent_id: str) -> bool:
     return cursor.rowcount > 0
 
 
+ELIGIBILITY_MIN_TRUST = 0.1  # Below this, agent is not eligible for routing
+
+
+def is_eligible_for_routing(agent: Agent) -> bool:
+    """Central eligibility gate — the single source of truth for routing.
+
+    An agent must be:
+    - online (not offline, not suspect)
+    - trusted (trust_score >= threshold)
+
+    This function is used by find_by_capability AND by the router.
+    No agent can be dispatched without passing this gate.
+    """
+    if agent.status not in (AgentStatus.ONLINE, AgentStatus.DEGRADED):
+        return False
+    return agent.trust_score >= ELIGIBILITY_MIN_TRUST
+
+
 async def find_by_capability(
     capability: str,
     language: str | None = None,
     min_trust: float = 0.0,
 ) -> list[Agent]:
-    """Find agents that offer a specific capability."""
+    """Find eligible agents that offer a specific capability."""
     agents = await list_agents(status=AgentStatus.ONLINE, capability=capability)
+    # Apply central eligibility gate
+    agents = [a for a in agents if is_eligible_for_routing(a)]
     if min_trust > 0:
         agents = [a for a in agents if a.trust_score >= min_trust]
     if language:

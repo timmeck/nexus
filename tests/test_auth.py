@@ -71,3 +71,21 @@ class TestHmacSigning:
         key = generate_api_key()
         valid = verify_signature("{}", key, "not-a-number", "somesig")
         assert valid is False
+
+    def test_replay_same_signature_rejected(self):
+        """Same signature used twice must be rejected (replay cache)."""
+        from nexus.auth import _replay_cache
+
+        _replay_cache.clear()  # Clean state
+
+        key = generate_api_key()
+        payload = '{"query": "replay test"}'
+        headers = sign_request(payload, key)
+
+        # First use — should pass
+        valid1 = verify_signature(payload, key, headers["X-Nexus-Timestamp"], headers["X-Nexus-Signature"])
+        assert valid1 is True
+
+        # Second use — same signature, must fail
+        valid2 = verify_signature(payload, key, headers["X-Nexus-Timestamp"], headers["X-Nexus-Signature"])
+        assert valid2 is False

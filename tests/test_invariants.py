@@ -49,6 +49,40 @@ async def test_duplicate_request_rejected(client: AsyncClient):
     assert "Duplicate" in data2.get("error", "")
 
 
+# ── 0b. Low-trust agent excluded from routing ───────────────
+
+
+@pytest.mark.asyncio
+async def test_low_trust_agent_not_eligible(client: AsyncClient):
+    """Agent with trust below threshold must not be routed.
+
+    Tests the centralized eligibility gate.
+    """
+    from nexus.database import get_db
+
+    agent = await create_agent(
+        client,
+        {
+            "name": "untrusted-agent",
+            "endpoint": "http://localhost:19860",
+            "capabilities": [{"name": "shady", "description": "Shady", "languages": ["en"]}],
+        },
+    )
+
+    # Slash trust to near zero
+    db = await get_db()
+    await db.execute("UPDATE agents SET trust_score = 0.05 WHERE id = ?", (agent["id"],))
+    await db.commit()
+
+    # Request should fail — agent below eligibility threshold
+    resp = await client.post(
+        "/api/protocol/request",
+        json={"from_agent": "consumer-1", "query": "test", "capability": "shady"},
+    )
+    data = resp.json()
+    assert data["status"] in ("failed", "rejected")
+
+
 # ── 1. Policy rejection is absolute ─────────────────────────
 
 
