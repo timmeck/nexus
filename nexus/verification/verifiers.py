@@ -10,6 +10,8 @@ from __future__ import annotations
 
 import json
 import logging
+import re
+from collections import Counter
 from difflib import SequenceMatcher
 
 from nexus.models.verification import AgentAnswer, Verdict, VerificationMode
@@ -27,6 +29,10 @@ CAPABILITY_MODES: dict[str, VerificationMode] = {
     "schema_generation": VerificationMode.STRUCTURED,
     "classification": VerificationMode.STRUCTURED,
     "entity_extraction": VerificationMode.STRUCTURED,
+    # Claim-level verification (text analysis, summarization, factual tasks)
+    "text_analysis": VerificationMode.CLAIM_EXTRACTION,
+    "summarization": VerificationMode.CLAIM_EXTRACTION,
+    "fact_check": VerificationMode.CLAIM_EXTRACTION,
 }
 
 
@@ -54,6 +60,8 @@ def run_verifier(
     """
     if mode == VerificationMode.STRUCTURED:
         return verify_structured(answers, expected_schema)
+    if mode == VerificationMode.CLAIM_EXTRACTION:
+        return verify_claims(answers)
     return verify_text_similarity(answers)
 
 
@@ -211,3 +219,375 @@ def _normalize_value(v: object) -> str:
     if isinstance(v, (int, float)):
         return str(v)
     return json.dumps(v, sort_keys=True, default=str)
+
+
+# ── Claim Extraction Verifier ────────────────────────────────────
+#
+# Extracts factual claims from agent answers and compares them.
+# Catches near-match failures that string similarity misses:
+#   - wrong numbers (50M vs 35M)
+#   - wrong entities (US vs EU)
+#   - wrong currencies (dollars vs euros)
+#   - wrong dates (June 2025 vs March 2025)
+
+
+# Critical claim types — mismatch on any of these vetoes PASS
+CRITICAL_CLAIM_TYPES = {"number", "currency", "percentage", "date", "jurisdiction"}
+
+# Weights for scoring: critical claims matter more
+CLAIM_WEIGHTS = {
+    "number": 3.0,
+    "currency": 3.0,
+    "percentage": 3.0,
+    "date": 2.0,
+    "jurisdiction": 2.0,
+    "entity": 1.5,
+    "general": 1.0,
+}
+
+
+# Word-to-number mapping for adversarial formatting defense
+WORD_NUMBERS = {
+    "zero": 0, "one": 1, "two": 2, "three": 3, "four": 4, "five": 5,
+    "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10,
+    "eleven": 11, "twelve": 12, "thirteen": 13, "fourteen": 14, "fifteen": 15,
+    "sixteen": 16, "seventeen": 17, "eighteen": 18, "nineteen": 19,
+    "twenty": 20, "thirty": 30, "forty": 40, "fifty": 50,
+    "sixty": 60, "seventy": 70, "eighty": 80, "ninety": 90,
+}
+
+WORD_MULTIPLIERS = {
+    "hundred": 100, "thousand": 1_000, "million": 1_000_000, "billion": 1_000_000_000,
+}
+
+# Minimum number of critical claims expected from a real analysis
+MIN_CRITICAL_CLAIMS = 2
+
+
+def _words_to_number(text: str) -> list[tuple[str, int]]:
+    """Convert word numbers to integers. Returns list of (matched_span, value).
+
+    Handles: "thirty five million", "twenty four", "eighty one", "five".
+    """
+    results = []
+    words = re.findall(r"[a-z]+", text.lower())
+    i = 0
+    while i < len(words):
+        w = words[i]
+        if w not in WORD_NUMBERS and w not in WORD_MULTIPLIERS:
+            i += 1
+            continue
+
+        # Start accumulating a number
+        current = 0
+        total = 0
+        while i < len(words):
+            w = words[i]
+            if w in WORD_NUMBERS:
+                current += WORD_NUMBERS[w]
+                i += 1
+            elif w in WORD_MULTIPLIERS:
+                if current == 0:
+                    current = 1
+                current *= WORD_MULTIPLIERS[w]
+                if WORD_MULTIPLIERS[w] >= 1000:
+                    total += current
+                    current = 0
+                i += 1
+            else:
+                break
+
+        total += current
+        if total > 0:
+            results.append((str(total), total))
+
+    return results
+
+
+def extract_claims(text: str) -> dict[str, list[str]]:
+    """Extract factual claims from text into categorized buckets.
+
+    Returns dict of claim_type -> list of normalized values.
+    """
+    claims: dict[str, list[str]] = {
+        "number": [],
+        "currency": [],
+        "percentage": [],
+        "date": [],
+        "jurisdiction": [],
+        "entity": [],
+    }
+
+    lower = text.lower()
+
+    # Word numbers: convert "thirty five million" -> 35000000
+    for num_str, num_val in _words_to_number(lower):
+        claims["number"].append(str(num_val))
+
+    # Also extract word-based percentages: "ten percent"
+    for m in re.finditer(r"(zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety)\s*(?:\s+(?:one|two|three|four|five|six|seven|eight|nine))?\s*percent", lower):
+        word_nums = re.findall(r"[a-z]+", m.group(0).replace("percent", "").strip())
+        val = sum(WORD_NUMBERS.get(w, 0) for w in word_nums)
+        if val > 0:
+            claims["percentage"].append(str(val))
+
+    # Word-based dates: "march fifteenth" or ordinals
+    ordinals = {
+        "first": 1, "second": 2, "third": 3, "fourth": 4, "fifth": 5,
+        "sixth": 6, "seventh": 7, "eighth": 8, "ninth": 9, "tenth": 10,
+        "eleventh": 11, "twelfth": 12, "thirteenth": 13, "fourteenth": 14,
+        "fifteenth": 15, "sixteenth": 16, "seventeenth": 17, "eighteenth": 18,
+        "nineteenth": 19, "twentieth": 20, "twenty first": 21, "twenty second": 22,
+        "twenty third": 23, "twenty fourth": 24, "twenty fifth": 25,
+        "twenty sixth": 26, "twenty seventh": 27, "twenty eighth": 28,
+        "twenty ninth": 29, "thirtieth": 30, "thirty first": 31,
+    }
+
+    months_map = {
+        "january": "01", "february": "02", "march": "03", "april": "04",
+        "may": "05", "june": "06", "july": "07", "august": "08",
+        "september": "09", "october": "10", "november": "11", "december": "12",
+    }
+
+    for month_name, month_num in months_map.items():
+        for ord_name, ord_val in ordinals.items():
+            pattern = rf"{month_name}\s+{ord_name}"
+            if re.search(pattern, lower):
+                # Try to find a year nearby
+                year_match = re.search(rf"{pattern},?\s+(twenty\s+twenty\s+\w+|\d{{4}})", lower)
+                if year_match:
+                    year_text = year_match.group(1)
+                    # Convert word year: "twenty twenty five" -> 2025
+                    if year_text.isdigit():
+                        year = year_text
+                    else:
+                        year_words = _words_to_number(year_text)
+                        year = str(year_words[0][1]) if year_words else ""
+                    if year:
+                        claims["date"].append(f"{year}-{month_num}-{str(ord_val).zfill(2)}")
+
+    # Numbers: extract quantities with context (e.g. "35 million", "81")
+    for m in re.finditer(r"(\d+(?:\.\d+)?)\s*(million|billion|thousand|hundred)?", lower):
+        value = float(m.group(1))
+        unit = m.group(2) or ""
+        multipliers = {"million": 1_000_000, "billion": 1_000_000_000, "thousand": 1_000, "hundred": 100}
+        if unit in multipliers:
+            value *= multipliers[unit]
+        claims["number"].append(str(int(value)))
+
+    # Currencies
+    for m in re.finditer(r"(euros?|eur|dollars?|usd|gbp|pounds?|¥|yen|yuan)", lower):
+        normalized = m.group(1)
+        if normalized.startswith("euro") or normalized == "eur":
+            claims["currency"].append("EUR")
+        elif normalized.startswith("dollar") or normalized == "usd":
+            claims["currency"].append("USD")
+        elif normalized.startswith("pound") or normalized == "gbp":
+            claims["currency"].append("GBP")
+        else:
+            claims["currency"].append(normalized.upper())
+
+    # Percentages
+    for m in re.finditer(r"(\d+(?:\.\d+)?)\s*(%|percent)", lower):
+        claims["percentage"].append(m.group(1))
+
+    # Dates (various formats)
+    months = {
+        "january": "01", "february": "02", "march": "03", "april": "04",
+        "may": "05", "june": "06", "july": "07", "august": "08",
+        "september": "09", "october": "10", "november": "11", "december": "12",
+    }
+    for m in re.finditer(r"(january|february|march|april|may|june|july|august|september|october|november|december)\s+(\d{1,2}),?\s+(\d{4})", lower):
+        month = months[m.group(1)]
+        day = m.group(2).zfill(2)
+        year = m.group(3)
+        claims["date"].append(f"{year}-{month}-{day}")
+
+    # Also catch "month year" without day
+    for m in re.finditer(r"(january|february|march|april|may|june|july|august|september|october|november|december)\s+(\d{4})", lower):
+        month = months[m.group(1)]
+        year = m.group(2)
+        claims["date"].append(f"{year}-{month}")
+
+    # Time periods (e.g. "24 months", "18 months")
+    for m in re.finditer(r"(\d+)\s+(months?|years?|weeks?|days?)", lower):
+        claims["number"].append(f"{m.group(1)}_{m.group(2).rstrip('s')}")
+
+    # Jurisdictions / entities
+    jurisdictions = [
+        "european union", "eu", "united states", "us", "usa",
+        "united kingdom", "uk", "china", "japan", "india",
+        "european commission",
+    ]
+    for j in jurisdictions:
+        if j in lower:
+            # Normalize
+            if j in ("european union", "eu"):
+                claims["jurisdiction"].append("EU")
+            elif j in ("united states", "us", "usa"):
+                claims["jurisdiction"].append("US")
+            elif j in ("united kingdom", "uk"):
+                claims["jurisdiction"].append("UK")
+            elif j == "european commission":
+                claims["jurisdiction"].append("EU_COMMISSION")
+            else:
+                claims["jurisdiction"].append(j.upper())
+
+    # Named entities (organizations, acts)
+    entity_patterns = [
+        r"ai\s+act", r"ai\s+safety\s+act", r"ai\s+governance",
+        r"conformity\s+assessments?", r"safety\s+evaluations?",
+        r"mandatory\s+registration",
+    ]
+    for pattern in entity_patterns:
+        if re.search(pattern, lower):
+            claims["entity"].append(re.sub(r"\s+", "_", pattern.replace(r"\s+", " ").replace("s?", "")))
+
+    # Deduplicate within each category
+    for key in claims:
+        claims[key] = sorted(set(claims[key]))
+
+    return claims
+
+
+def verify_claims(
+    answers: list[AgentAnswer],
+) -> tuple[Verdict, float, list[str]]:
+    """Verify agent answers by extracting and comparing factual claims.
+
+    Process:
+    1. Extract claims from each answer
+    2. Compare claims across agents per category
+    3. Critical claim mismatches (numbers, currencies, dates) veto PASS
+    4. Score based on weighted agreement across all claim types
+
+    Verdict:
+      pass:          weighted agreement >= 0.7 AND no critical mismatches
+      fail:          weighted agreement < 0.3 OR critical mismatches with strong disagreement
+      inconclusive:  everything else
+    """
+    if len(answers) < 2:
+        return Verdict.INCONCLUSIVE, 1.0, ["Only one response -- cannot verify"]
+
+    # Extract claims from all answers
+    agent_claims: list[tuple[AgentAnswer, dict[str, list[str]]]] = []
+    for a in answers:
+        claims = extract_claims(a.answer)
+        agent_claims.append((a, claims))
+
+    contradictions: list[str] = []
+    category_scores: dict[str, float] = {}
+    critical_mismatch = False
+
+    # ── Missing-claim detection ──────────────────────────────────
+    # If an agent has significantly fewer critical claims than others,
+    # it's likely omitting facts (Omission Attack).
+    critical_counts = []
+    for agent, claims in agent_claims:
+        count = sum(
+            len(claims.get(cat, []))
+            for cat in CRITICAL_CLAIM_TYPES
+        )
+        critical_counts.append((agent.agent_name, count))
+
+    if critical_counts:
+        max_claims = max(c for _, c in critical_counts)
+        for name, count in critical_counts:
+            if max_claims >= MIN_CRITICAL_CLAIMS and count < max_claims * 0.3:
+                contradictions.append(
+                    f"[omission] {name}: only {count} critical claims vs {max_claims} from other agents"
+                )
+                critical_mismatch = True
+
+    # Compare each claim category
+    all_categories = set()
+    for _, claims in agent_claims:
+        for cat, values in claims.items():
+            if values:
+                all_categories.add(cat)
+
+    for category in all_categories:
+        # Collect all values for this category across agents
+        agent_values: list[tuple[str, set[str]]] = []
+        for agent, claims in agent_claims:
+            values = set(claims.get(category, []))
+            if values:
+                agent_values.append((agent.agent_name, values))
+
+        if len(agent_values) < 2:
+            # Only one agent has claims in this category -- can't compare
+            continue
+
+        # Calculate pairwise agreement (Jaccard similarity)
+        total_jaccard = 0.0
+        pairs = 0
+        mismatched_agents: list[tuple[str, str, set[str], set[str]]] = []
+
+        for i in range(len(agent_values)):
+            for j in range(i + 1, len(agent_values)):
+                name_i, vals_i = agent_values[i]
+                name_j, vals_j = agent_values[j]
+
+                intersection = vals_i & vals_j
+                union = vals_i | vals_j
+
+                jaccard = len(intersection) / len(union) if union else 1.0
+                total_jaccard += jaccard
+                pairs += 1
+
+                # Track mismatches
+                if jaccard < 1.0:
+                    diff_i = vals_i - vals_j
+                    diff_j = vals_j - vals_i
+                    if diff_i or diff_j:
+                        mismatched_agents.append((name_i, name_j, diff_i, diff_j))
+
+        avg_jaccard = total_jaccard / pairs if pairs > 0 else 1.0
+        category_scores[category] = avg_jaccard
+
+        # Report mismatches
+        for name_i, name_j, diff_i, diff_j in mismatched_agents:
+            if diff_i or diff_j:
+                details = []
+                if diff_i:
+                    details.append(f"{name_i} has {diff_i}")
+                if diff_j:
+                    details.append(f"{name_j} has {diff_j}")
+                contradictions.append(
+                    f"[{category}] {name_i} vs {name_j}: {', '.join(details)}"
+                )
+
+                # Mark critical mismatches
+                if category in CRITICAL_CLAIM_TYPES and avg_jaccard < 0.8:
+                    critical_mismatch = True
+
+    # Calculate weighted score
+    if not category_scores:
+        # No extractable claims -- fall back to text similarity
+        return verify_text_similarity(answers)
+
+    total_weight = 0.0
+    weighted_sum = 0.0
+    for category, score in category_scores.items():
+        weight = CLAIM_WEIGHTS.get(category, 1.0)
+        weighted_sum += score * weight
+        total_weight += weight
+
+    final_score = weighted_sum / total_weight if total_weight > 0 else 0.0
+
+    # Determine verdict
+    if critical_mismatch:
+        # Critical facts disagree -- cannot pass
+        if final_score < 0.3:
+            verdict = Verdict.FAIL
+        else:
+            verdict = Verdict.FAIL  # Critical mismatch forces FAIL even with decent score
+            contradictions.insert(0, "CRITICAL: factual claims disagree on key fields")
+    elif final_score >= 0.7:
+        verdict = Verdict.PASS
+    elif final_score < 0.3:
+        verdict = Verdict.FAIL
+    else:
+        verdict = Verdict.INCONCLUSIVE
+
+    return verdict, round(final_score, 4), contradictions

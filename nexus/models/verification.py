@@ -14,7 +14,7 @@ class VerificationMode(enum.StrEnum):
 
     TEXT_SIMILARITY = "text_similarity"  # Generic: SequenceMatcher consensus
     STRUCTURED = "structured"  # JSON schema / deterministic field match
-    # Future: CODE = "code", RETRIEVAL = "retrieval"
+    CLAIM_EXTRACTION = "claim_extraction"  # Extract facts + compare critical fields
 
 
 class Verdict(enum.StrEnum):
