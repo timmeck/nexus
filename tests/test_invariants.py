@@ -698,6 +698,48 @@ def test_no_direct_state_writes_in_handler():
     assert direct_writes == 0, f"Found {direct_writes} direct .state = writes in handler — must be 0"
 
 
+# ── 14. CI Guard: no SELECT-then-UPDATE on finalizable state ──
+
+
+def test_no_select_then_update_on_escrow_status():
+    """Defense service must not SELECT escrow status then UPDATE separately.
+
+    All escrow finalization must use CAS: UPDATE WHERE status='held'.
+    This CI guard prevents regression to the race condition pattern.
+    """
+    import inspect
+
+    from nexus.defense import service
+
+    # Every function that changes escrow status must use
+    # UPDATE ... WHERE ... AND status = 'held' (CAS pattern)
+    for func_name in ("release_escrow", "dispute_escrow"):
+        func = getattr(service, func_name)
+        func_source = inspect.getsource(func)
+
+        # Must contain atomic CAS update
+        assert "AND status = 'held'" in func_source, f"{func_name} missing CAS pattern (UPDATE WHERE status='held')"
+
+        # The CAS UPDATE must come BEFORE the SELECT (read-after-write, not read-before-write)
+        cas_pos = func_source.index("AND status = 'held'")
+        if "SELECT * FROM escrow WHERE escrow_id" in func_source:
+            select_pos = func_source.index("SELECT * FROM escrow WHERE escrow_id")
+            assert cas_pos < select_pos, f"{func_name}: SELECT comes before CAS UPDATE — forbidden pattern"
+
+
+def test_no_select_then_update_on_challenge_status():
+    """Challenge resolution must use CAS pattern."""
+    import inspect
+
+    from nexus.defense import service
+
+    func_source = inspect.getsource(service.resolve_challenge)
+
+    assert "AND status = 'pending'" in func_source, (
+        "resolve_challenge missing CAS pattern (UPDATE WHERE status='pending')"
+    )
+
+
 # ── 13. NX-310: Pre-dispatch drift per eligibility dimension ──
 
 
