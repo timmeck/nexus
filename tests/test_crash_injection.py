@@ -19,7 +19,7 @@ The 7 critical edges from the Crash Table:
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import TYPE_CHECKING
 
 import pytest

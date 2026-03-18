@@ -12,7 +12,7 @@ Maps to Fehlerklasse #3 (Split-Brain) from the consistency matrix.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import TYPE_CHECKING
 
 import pytest
@@ -266,7 +266,6 @@ async def test_no_double_escrow_for_same_request(client: AsyncClient):
     The UNIQUE partial index on escrow(request_id) WHERE status='held'
     prevents this.
     """
-    from nexus.database import get_db
     from nexus.defense.service import create_escrow
 
     consumer = await create_agent(

@@ -78,7 +78,7 @@ async def test_ghost_release_attack(client: AsyncClient):
         resolve_challenge(challenge["challenge_id"], upheld=True, ruling="ghost ruling"),
     )
 
-    release_result, dispute_result, challenge_result = results
+    release_result, dispute_result, _challenge_result = results
 
     # Escrow: exactly ONE of release/dispute should succeed
     escrow_successes = sum(1 for r in [release_result, dispute_result] if "error" not in r)
@@ -186,10 +186,7 @@ async def test_replay_within_window_attack(client: AsyncClient):
     }
 
     tasks = [client.post("/api/protocol/request", json=payload) for _ in range(50)]
-    responses = await asyncio.gather(*tasks)
-
-    # Count how many were NOT rejected as duplicate
-    non_duplicate = [r for r in responses if "Duplicate" not in r.json().get("error", "")]
+    await asyncio.gather(*tasks)
 
     # INVARIANT: at most 1 non-duplicate response
     # (May be 0 if the first also fails for other reasons like no capability)
@@ -227,7 +224,7 @@ async def test_payload_swap_attack(client: AsyncClient):
         "query": "legitimate query",
         "capability": "nonexistent",
     }
-    resp1 = await client.post("/api/protocol/request", json=payload1)
+    await client.post("/api/protocol/request", json=payload1)
 
     # Second request — SAME request_id, DIFFERENT payload
     payload2 = {
