@@ -124,11 +124,28 @@ async def handle_request(request: NexusRequest) -> NexusResponse:
 
         lifecycle.transition(RequestState.BUDGET_CHECKED)
 
-        # ── Step 4: Forward to Agent ─────────────────────────────
+        # ── Step 4: Pre-Dispatch Eligibility Check ────────────────
+        # Re-check eligibility right before dispatch — agent state may have
+        # drifted since routing (reaper, trust change, etc.)
+        refreshed_agent = await registry.get_agent(best.agent.id)
+        if not refreshed_agent or not registry.is_eligible_for_routing(refreshed_agent):
+            lifecycle.transition(RequestState.FAILED)
+            trail_step(trail, "agent_became_ineligible")
+            _cleanup(request.request_id)
+            return NexusResponse(
+                request_id=request.request_id,
+                from_agent="nexus-core",
+                to_agent=request.from_agent,
+                status=ResponseStatus.FAILED,
+                error=f"Agent {best.agent.id} became ineligible between routing and dispatch",
+                meta={"trail": trail},
+            )
+
+        # ── Step 5: Forward to Agent ─────────────────────────────
         trail_step(trail, "forwarding")
         lifecycle.transition(RequestState.FORWARDING)
 
-        response = await _forward_to_agent(request, best.agent)
+        response = await _forward_to_agent(request, refreshed_agent)
         elapsed_ms = int((time.time() - start) * 1000)
         response.processing_ms = elapsed_ms
         success = response.status == ResponseStatus.COMPLETED

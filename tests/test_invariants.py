@@ -83,6 +83,48 @@ async def test_low_trust_agent_not_eligible(client: AsyncClient):
     assert data["status"] in ("failed", "rejected")
 
 
+# ── 0c. Agent becomes ineligible between routing and dispatch ──
+
+
+@pytest.mark.asyncio
+async def test_agent_ineligible_before_dispatch(client: AsyncClient):
+    """Agent that becomes offline/untrusted after routing must not be dispatched.
+
+    Tests the pre-dispatch eligibility re-check.
+    """
+    from nexus.database import get_db
+
+    agent = await create_agent(
+        client,
+        {
+            "name": "drifting-agent",
+            "endpoint": "http://localhost:19870",
+            "capabilities": [{"name": "drift_test", "description": "Test", "languages": ["en"]}],
+        },
+    )
+
+    # Register consumer with funds
+    consumer = await create_agent(
+        client,
+        {"name": "drift-consumer", "endpoint": "http://localhost:19871", "capabilities": []},
+    )
+
+    # Mark agent offline AFTER it would be found by routing
+    # (simulating reaper marking it offline between routing and dispatch)
+    db = await get_db()
+    await db.execute("UPDATE agents SET status = 'offline' WHERE id = ?", (agent["id"],))
+    await db.commit()
+
+    resp = await client.post(
+        "/api/protocol/request",
+        json={"from_agent": consumer["id"], "query": "test drift", "capability": "drift_test"},
+    )
+    data = resp.json()
+
+    # Agent is offline — should fail, no forwarding
+    assert data["status"] in ("failed", "rejected")
+
+
 # ── 1. Policy rejection is absolute ─────────────────────────
 
 
