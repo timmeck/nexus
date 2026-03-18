@@ -665,7 +665,12 @@ def verify_claims(
 
     # Calculate weighted score
     if not category_scores:
-        # No extractable claims -- fall back to text similarity
+        if critical_mismatch:
+            # Omission detected but no shared categories to compare --
+            # one agent has claims, the other has none. This is a clear fail.
+            contradictions.insert(0, "CRITICAL: factual claims disagree on key fields")
+            return Verdict.FAIL, 0.0, contradictions
+        # No extractable claims from anyone -- fall back to text similarity
         return verify_text_similarity(answers)
 
     total_weight = 0.0
