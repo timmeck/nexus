@@ -25,8 +25,11 @@ These modules have strict review requirements:
 - Not introduce alternative settlement/dispatch paths
 - Not bypass the state machine
 - Not weaken escrow exclusivity
+- Use compare-and-swap (CAS) for any mutation of shared finalizable state
 - Include invariant tests for any new guarantees
 - Pass the [merge checklist](#merge-checklist)
+
+**CAS Rule:** Any mutation of shared finalizable state must use `UPDATE ... WHERE current_status = ?` with rowcount check, or provide an equivalent atomic guarantee. SELECT-then-UPDATE is forbidden for state transitions.
 
 ### Outer Layer (open)
 These modules welcome contributions:
