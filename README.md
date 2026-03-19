@@ -51,7 +51,7 @@ We ran 4 rounds of adversarial testing against the verification system. Every ro
 | Word Numbers ("thirty five million") | FAIL | 65% | **CAUGHT** |
 | Coordinated Collusion (varied wrong answers) | FAIL | 74% | **CAUGHT** |
 
-**11/11 adversarial patterns caught. 0 escaped.**
+**11/11 adversarial patterns caught. 0 escaped.** Plus 4 meta-agent attacks (agents that know the verifier logic): 1 caught, 3 escaped at semantic boundary. See [Known Detection Boundaries](#known-detection-boundaries).
 
 False positive tests (4 honest agents with different styles): 4/4 pass, 0 false negatives.
 
@@ -164,12 +164,22 @@ This catches the attacks that naive string matching misses: partial cheaters (80
 | Defense | Slashing, escrow, challenges, sybil detection |
 | Policy | Data locality, compliance claims, routing policies |
 
-## What Nexus Does NOT Claim
+## Known Detection Boundaries
 
-- Universal truth verification (we measure consistency, not ground truth)
-- Perfect resistance to all adversarial strategies
-- Production-readiness at scale (yet)
-- Coverage for all task types (strongest for structured, factual outputs)
+Nexus catches **cross-agent factual inconsistencies** — not semantic meaning. We tested this explicitly with meta-agents that know how our verifier works:
+
+| Attack | What it does | Caught? | Why |
+|---|---|---|---|
+| **Low Amplitude** | 34M instead of 35M | Yes | Claim extraction distinguishes the integers |
+| **Meaning Swap** | "penalty" becomes "subsidy", same numbers | **No** | Claims match — meaning is invisible to extraction |
+| **Negation** | "can NOT exceed 35M" — same claims, opposite meaning | **No** | Negation doesn't change extracted values |
+| **Context Shift** | Same numbers, different regulation (Digital Markets Act) | **No** | Numbers/dates match — entity anchor is too weak |
+| **Shared Hallucination** | All agents agree on the same wrong fact | **No** | Consensus is not truth — by design |
+
+These are **architectural limits of claim-level verification**, not parser bugs. Addressing them requires semantic analysis (negation detection, relation extraction, LLM-based adjudication) — planned for future phases.
+
+**What Nexus does well:** numeric drift, format tricks, omissions, collusion, style variation, confidence gaming.
+**What it cannot do yet:** meaning inversion, propositional role changes, context substitution.
 
 Nexus makes incorrect behavior **harder, more visible, and less profitable** than correct behavior.
 
