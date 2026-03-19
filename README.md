@@ -53,7 +53,7 @@ We ran 4 rounds of adversarial testing against the verification system. Every ro
 
 **11/11 adversarial patterns caught. 0 escaped.**
 
-False positive tests (honest agents with different styles): 3/4 pass, 1 edge case at 97%.
+False positive tests (4 honest agents with different styles): 4/4 pass, 0 false negatives.
 
 Run it yourself: `python red_team_isolated.py`
 
