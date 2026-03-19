@@ -231,17 +231,43 @@ def _normalize_value(v: object) -> str:
 
 
 # Critical claim types — mismatch on any of these vetoes PASS
-CRITICAL_CLAIM_TYPES = {"number", "currency", "percentage", "date", "jurisdiction"}
+# "metadata_number" (word count, char count, etc.) is NOT critical —
+# LLMs are notoriously bad at counting, so disagreement is expected noise.
+CRITICAL_CLAIM_TYPES = {"substantive_number", "currency", "percentage", "date", "jurisdiction"}
 
-# Weights for scoring: critical claims matter more
+# Weights for scoring: critical claims matter more, metadata less
 CLAIM_WEIGHTS = {
-    "number": 3.0,
+    "substantive_number": 3.0,
+    "metadata_number": 0.5,  # low weight — counting disagreements are noise
     "currency": 3.0,
     "percentage": 3.0,
     "date": 2.0,
     "jurisdiction": 2.0,
     "entity": 1.5,
     "general": 1.0,
+}
+
+# Keywords near a number that indicate it's metadata (not a substantive claim)
+METADATA_NUMBER_CONTEXT = {
+    "word",
+    "words",
+    "character",
+    "characters",
+    "char",
+    "chars",
+    "sentence",
+    "sentences",
+    "paragraph",
+    "paragraphs",
+    "page",
+    "pages",
+    "token",
+    "tokens",
+    "line",
+    "lines",
+    "syllable",
+    "syllables",
+    "reading",
 }
 
 
@@ -333,13 +359,32 @@ def _words_to_number(text: str) -> list[tuple[str, int]]:
     return results
 
 
+def _classify_number(text: str, match_start: int, match_end: int) -> str:
+    """Classify a number as 'substantive_number' or 'metadata_number'.
+
+    Looks at nearby words (window of ~30 chars) for metadata indicators
+    like 'word', 'character', 'sentence', 'page', 'token'.
+    """
+    # Check window around the number match
+    window_start = max(0, match_start - 30)
+    window_end = min(len(text), match_end + 30)
+    window = text[window_start:window_end].lower()
+
+    # If any metadata keyword is near this number, it's metadata
+    nearby_words = set(re.findall(r"[a-z]+", window))
+    if nearby_words & METADATA_NUMBER_CONTEXT:
+        return "metadata_number"
+    return "substantive_number"
+
+
 def extract_claims(text: str) -> dict[str, list[str]]:
     """Extract factual claims from text into categorized buckets.
 
     Returns dict of claim_type -> list of normalized values.
     """
     claims: dict[str, list[str]] = {
-        "number": [],
+        "substantive_number": [],
+        "metadata_number": [],
         "currency": [],
         "percentage": [],
         "date": [],
@@ -350,8 +395,9 @@ def extract_claims(text: str) -> dict[str, list[str]]:
     lower = text.lower()
 
     # Word numbers: convert "thirty five million" -> 35000000
+    # Word-spelled numbers are almost always substantive (nobody writes "sixty one words")
     for _num_str, num_val in _words_to_number(lower):
-        claims["number"].append(str(num_val))
+        claims["substantive_number"].append(str(num_val))
 
     # Also extract word-based percentages: "ten percent"
     for m in re.finditer(
@@ -436,12 +482,13 @@ def extract_claims(text: str) -> dict[str, list[str]]:
     multipliers = {"million": 1_000_000, "billion": 1_000_000_000, "thousand": 1_000, "hundred": 100}
 
     # First handle time periods: "24 months", "24-month", "24mo"
+    # Time periods are always substantive claims
     time_period_numbers: set[str] = set()  # track to avoid double-extraction
     for m in re.finditer(r"(\d+)\s*mo\b", lower):
-        claims["number"].append(f"{m.group(1)}_month")
+        claims["substantive_number"].append(f"{m.group(1)}_month")
         time_period_numbers.add(m.group(1))
     for m in re.finditer(r"(\d+)[\s-]+(months?|years?|weeks?|days?)", lower):
-        claims["number"].append(f"{m.group(1)}_{m.group(2).rstrip('s')}")
+        claims["substantive_number"].append(f"{m.group(1)}_{m.group(2).rstrip('s')}")
         time_period_numbers.add(m.group(1))
 
     for m in re.finditer(
@@ -452,12 +499,16 @@ def extract_claims(text: str) -> dict[str, list[str]]:
         unit = m.group(2) or ""
         unit = abbreviations.get(unit, unit)  # normalize abbreviations
         if unit in multipliers:
+            # Numbers with multipliers (35 million, 50M) are always substantive
             value *= multipliers[unit]
+            claims["substantive_number"].append(str(int(value)))
         else:
             # Skip numbers already captured as time periods
             if raw_num in time_period_numbers:
                 continue
-        claims["number"].append(str(int(value)))
+            # Classify based on nearby context
+            num_type = _classify_number(lower, m.start(), m.end())
+            claims[num_type].append(str(int(value)))
 
     # Currencies
     for m in re.finditer(r"(euros?|eur|dollars?|usd|gbp|pounds?|¥|yen|yuan)", lower):

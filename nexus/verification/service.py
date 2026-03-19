@@ -160,7 +160,7 @@ async def _query_single_agent(agent, request: VerificationRequest) -> AgentAnswe
             auth_headers = sign_request(payload_json, agent.api_key)
             headers.update(auth_headers)
 
-        async with httpx.AsyncClient(timeout=5.0) as client:
+        async with httpx.AsyncClient(timeout=60.0) as client:
             resp = await client.post(
                 url,
                 content=payload_json,

@@ -165,19 +165,19 @@ def test_run_verifier_dispatches_claims():
 
 def test_extract_numbers():
     claims = extract_claims("The text has 72 words and 456 characters.")
-    assert "72" in claims["number"]
-    assert "456" in claims["number"]
+    assert "72" in claims["metadata_number"]  # near "words" -> metadata
+    assert "456" in claims["metadata_number"]  # near "characters" -> metadata
 
 
 def test_extract_millions():
     claims = extract_claims("Penalty up to 35 million euros.")
-    assert "35000000" in claims["number"]
+    assert "35000000" in claims["substantive_number"]
     assert "EUR" in claims["currency"]
 
 
 def test_extract_millions_abbreviated():
     claims = extract_claims("Penalty: EUR 35M.")
-    assert "35000000" in claims["number"]
+    assert "35000000" in claims["substantive_number"]
 
 
 def test_extract_percentages():
@@ -208,30 +208,31 @@ def test_extract_jurisdiction_no_false_match():
 
 def test_extract_time_periods():
     claims = extract_claims("Companies have 24 months to comply.")
-    assert "24_month" in claims["number"]
+    assert "24_month" in claims["substantive_number"]
 
 
 def test_extract_time_periods_hyphenated():
     claims = extract_claims("A 24-month compliance window.")
-    assert "24_month" in claims["number"]
+    assert "24_month" in claims["substantive_number"]
 
 
 def test_extract_time_periods_abbreviated():
     claims = extract_claims("24mo deadline.")
-    assert "24_month" in claims["number"]
+    assert "24_month" in claims["substantive_number"]
 
 
 def test_extract_no_double_count_time_periods():
     """24 from '24 months' should not appear as standalone number."""
     claims = extract_claims("Companies have 24 months to comply.")
-    numbers = claims["number"]
-    assert "24_month" in numbers
-    assert "24" not in numbers  # should not be double-extracted
+    sub = claims["substantive_number"]
+    meta = claims["metadata_number"]
+    assert "24_month" in sub
+    assert "24" not in sub and "24" not in meta
 
 
 def test_extract_word_numbers():
     claims = extract_claims("Penalty up to thirty five million euros.")
-    assert "35000000" in claims["number"]
+    assert "35000000" in claims["substantive_number"]
 
 
 def test_extract_word_percentages():
@@ -242,7 +243,19 @@ def test_extract_word_percentages():
 def test_extract_standalone_multiplier_ignored():
     """'million' alone (without number) should not extract as 1000000."""
     claims = extract_claims("The million dollar question remains.")
-    assert "1000000" not in claims["number"]
+    assert "1000000" not in claims["substantive_number"]
+    assert "1000000" not in claims["metadata_number"]
+
+
+def test_extract_number_categorization():
+    """Numbers near 'word/character/sentence' are metadata, others substantive."""
+    claims = extract_claims(
+        "Word count: 72 words. Character count: 456. Penalty: 35 million euros. Deadline: 24 months."
+    )
+    assert "72" in claims["metadata_number"]
+    assert "456" in claims["metadata_number"]
+    assert "35000000" in claims["substantive_number"]
+    assert "24_month" in claims["substantive_number"]
 
 
 def test_extract_entities():
@@ -326,9 +339,9 @@ def test_claims_shared_hallucination_passes():
     assert score >= 0.7
 
 
-def test_claims_partial_number_conflict_fails():
-    """When agents agree on most facts but have conflicting numbers,
-    the number mismatch triggers critical FAIL (numbers are critical claims)."""
+def test_claims_metadata_number_mismatch_passes():
+    """When agents agree on substantive facts but differ on word counts,
+    the metadata mismatch should NOT trigger FAIL (LLMs count poorly)."""
     answers = [
         _answer(
             "a1",
@@ -340,8 +353,8 @@ def test_claims_partial_number_conflict_fails():
         ),
     ]
     verdict, _score, _contras = verify_claims(answers)
-    # 72 vs 85 is a bilateral number conflict → critical mismatch → FAIL
-    assert verdict == Verdict.FAIL
+    # 72 vs 85 words is metadata — substantive claims all match → PASS
+    assert verdict == Verdict.PASS
 
 
 def test_claims_different_style_same_facts_pass():
