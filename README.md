@@ -51,7 +51,7 @@ We ran 4 rounds of adversarial testing against the verification system. Every ro
 | Word Numbers ("thirty five million") | FAIL | 65% | **CAUGHT** |
 | Coordinated Collusion (varied wrong answers) | FAIL | 74% | **CAUGHT** |
 
-**11/11 adversarial patterns caught. 0 escaped.** Plus 4 meta-agent attacks (agents that know the verifier logic): 1 caught, 3 escaped at semantic boundary. See [Known Detection Boundaries](#known-detection-boundaries).
+**11/11 adversarial patterns caught. 0 escaped.** Plus 4 meta-agent attacks (agents that know the verifier logic): all 4 caught (3 as SUSPICIOUS, 1 as FAIL). See [Known Detection Boundaries](#known-detection-boundaries).
 
 False positive tests (4 honest agents with different styles): 4/4 pass, 0 false negatives.
 
@@ -166,20 +166,22 @@ This catches the attacks that naive string matching misses: partial cheaters (80
 
 ## Known Detection Boundaries
 
-Nexus catches **cross-agent factual inconsistencies** — not semantic meaning. We tested this explicitly with meta-agents that know how our verifier works:
+We tested Nexus with **meta-agents** — adversarial agents that know how the verifier works and craft responses to bypass it:
 
-| Attack | What it does | Caught? | Why |
+| Attack | What it does | Result | How |
 |---|---|---|---|
-| **Low Amplitude** | 34M instead of 35M | Yes | Claim extraction distinguishes the integers |
-| **Meaning Swap** | "penalty" becomes "subsidy", same numbers | **No** | Claims match — meaning is invisible to extraction |
-| **Negation** | "can NOT exceed 35M" — same claims, opposite meaning | **No** | Negation doesn't change extracted values |
-| **Context Shift** | Same numbers, different regulation (Digital Markets Act) | **No** | Numbers/dates match — entity anchor is too weak |
-| **Shared Hallucination** | All agents agree on the same wrong fact | **No** | Consensus is not truth — by design |
+| **Low Amplitude** | 34M instead of 35M | **FAIL** | Claim extraction distinguishes the integers |
+| **Meaning Swap** | "penalty" becomes "subsidy", same numbers | **SUSPICIOUS** | Semantic tension: role conflict (penalty vs incentive language) |
+| **Negation** | "can NOT exceed 35M" — opposite meaning | **SUSPICIOUS** | Negation divergence detected (2 markers vs 0) |
+| **Context Shift** | Same numbers, different regulation | **SUSPICIOUS** | Regulation mismatch (AI Act vs Digital Markets Act) |
+| **Shared Hallucination** | All agents agree on the same wrong fact | PASS | Consensus is not truth — by design |
 
-These are **architectural limits of claim-level verification**, not parser bugs. Addressing them requires semantic analysis (negation detection, relation extraction, LLM-based adjudication) — planned for future phases.
+The SUSPICIOUS verdict means: "claims match numerically, but semantic signals diverge — manual review recommended." Three lightweight heuristics power this (no LLM needed): trigger word divergence, negation surface check, and entity/regulation anchoring.
 
-**What Nexus does well:** numeric drift, format tricks, omissions, collusion, style variation, confidence gaming.
-**What it cannot do yet:** meaning inversion, propositional role changes, context substitution.
+**Remaining architectural limit:** shared hallucination (all agents wrong in the same way). Addressing this requires external truth anchoring — planned for future phases.
+
+**What Nexus catches:** numeric drift, format tricks, omissions, collusion, style variation, confidence gaming, meaning swaps, negation, context shifts.
+**What Nexus cannot catch:** coordinated identical hallucination.
 
 Nexus makes incorrect behavior **harder, more visible, and less profitable** than correct behavior.
 
