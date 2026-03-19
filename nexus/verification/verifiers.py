@@ -697,4 +697,135 @@ def verify_claims(
     else:
         verdict = Verdict.INCONCLUSIVE
 
+    # ── Semantic Tension Detection ───────────────────────────────
+    # If claims match (PASS) but semantic signals diverge, downgrade to SUSPICIOUS.
+    # This catches meaning swap, negation, and context shift attacks.
+    if verdict == Verdict.PASS:
+        tension_flags = detect_semantic_tension(answers)
+        if tension_flags:
+            verdict = Verdict.SUSPICIOUS
+            for flag in tension_flags:
+                contradictions.append(f"[semantic] {flag}")
+
     return verdict, round(final_score, 4), contradictions
+
+
+# ── Semantic Tension Detection ────────────────────────────────────
+#
+# Lightweight heuristics that detect when claims match numerically
+# but the surrounding language suggests different meaning.
+# No LLM needed — just keyword class comparison and negation scanning.
+
+
+# Semantic role classes — words that indicate fundamentally different meaning
+ROLE_CLASSES: dict[str, list[str]] = {
+    "penalty": ["penalty", "fine", "sanction", "punishment", "forfeiture"],
+    "incentive": ["subsidy", "incentive", "grant", "reward", "bonus", "tax reduction", "tax credit"],
+    "obligation": ["requirement", "obligation", "mandate", "must", "shall", "required"],
+    "prohibition": ["ban", "prohibition", "forbidden", "prohibited", "excluded"],
+    "limit": ["cap", "limit", "maximum", "ceiling", "threshold", "cannot exceed", "not exceed"],
+}
+
+# Negation markers
+NEGATION_MARKERS = [
+    r"\bnot\b",
+    r"\bno\b",
+    r"\bnever\b",
+    r"\bcannot\b",
+    r"\bcan't\b",
+    r"\bwill not\b",
+    r"\bwon't\b",
+    r"\bdoes not\b",
+    r"\bdo not\b",
+    r"\bexcluded\s+from\b",
+    r"\bunless\b",
+    r"\bexempt\b",
+]
+
+# Key regulation/framework entities for context anchoring
+REGULATION_ENTITIES = [
+    (r"\bai\s+act\b", "AI_Act"),
+    (r"\bai\s+safety\s+act\b", "AI_Safety_Act"),
+    (r"\bdigital\s+markets?\s+act\b", "Digital_Markets_Act"),
+    (r"\bdigital\s+services?\s+act\b", "Digital_Services_Act"),
+    (r"\bgdpr\b", "GDPR"),
+    (r"\bsoc\s*2\b", "SOC2"),
+    (r"\bhipaa\b", "HIPAA"),
+    (r"\bnist\b", "NIST"),
+]
+
+
+def detect_semantic_tension(answers: list[AgentAnswer]) -> list[str]:
+    """Detect semantic tension between answers that have matching claims.
+
+    Returns list of tension flags. Empty list = no tension detected.
+    """
+    if len(answers) < 2:
+        return []
+
+    texts = [a.answer.lower() for a in answers]
+    names = [a.agent_name for a in answers]
+    flags: list[str] = []
+
+    # ── Heuristic 1: Trigger Word Divergence ─────────────────────
+    # Check if agents use words from conflicting semantic classes
+    agent_roles: list[tuple[str, set[str]]] = []
+    for name, text in zip(names, texts, strict=True):
+        found_roles: set[str] = set()
+        for role_class, keywords in ROLE_CLASSES.items():
+            for kw in keywords:
+                if kw in text:
+                    found_roles.add(role_class)
+                    break
+        agent_roles.append((name, found_roles))
+
+    # Check for conflicting role classes between agents
+    for i in range(len(agent_roles)):
+        for j in range(i + 1, len(agent_roles)):
+            name_i, roles_i = agent_roles[i]
+            name_j, roles_j = agent_roles[j]
+            # Conflicting pairs
+            conflicts = [
+                ("penalty", "incentive"),
+                ("obligation", "prohibition"),
+            ]
+            for a_role, b_role in conflicts:
+                if (a_role in roles_i and b_role in roles_j) or (b_role in roles_i and a_role in roles_j):
+                    flags.append(f"role conflict: {name_i} uses '{a_role}' language, {name_j} uses '{b_role}' language")
+
+    # ── Heuristic 2: Negation Surface Check ──────────────────────
+    # Count negation markers per agent; significant difference = tension
+    negation_counts: list[tuple[str, int]] = []
+    for name, text in zip(names, texts, strict=True):
+        count = sum(1 for pattern in NEGATION_MARKERS if re.search(pattern, text))
+        negation_counts.append((name, count))
+
+    if len(negation_counts) >= 2:
+        counts = [c for _, c in negation_counts]
+        max_neg = max(counts)
+        min_neg = min(counts)
+        if max_neg >= 2 and min_neg == 0:
+            # One agent has significant negation, another has none
+            high_neg = [n for n, c in negation_counts if c == max_neg]
+            low_neg = [n for n, c in negation_counts if c == min_neg]
+            flags.append(f"negation divergence: {high_neg[0]} has {max_neg} negation markers, {low_neg[0]} has none")
+
+    # ── Heuristic 3: Entity/Regulation Anchoring ─────────────────
+    # Check if agents reference different regulations/frameworks
+    agent_regs: list[tuple[str, set[str]]] = []
+    for name, text in zip(names, texts, strict=True):
+        found_regs: set[str] = set()
+        for pattern, label in REGULATION_ENTITIES:
+            if re.search(pattern, text):
+                found_regs.add(label)
+        agent_regs.append((name, found_regs))
+
+    # Compare: if agents reference different specific regulations
+    for i in range(len(agent_regs)):
+        for j in range(i + 1, len(agent_regs)):
+            name_i, regs_i = agent_regs[i]
+            name_j, regs_j = agent_regs[j]
+            if regs_i and regs_j and regs_i != regs_j:
+                flags.append(f"regulation mismatch: {name_i} references {regs_i}, {name_j} references {regs_j}")
+
+    return flags

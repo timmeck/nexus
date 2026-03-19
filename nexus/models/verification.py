@@ -21,6 +21,7 @@ class Verdict(enum.StrEnum):
     """Verification outcome — determines settlement path."""
 
     PASS = "pass"
+    SUSPICIOUS = "suspicious"  # Claims match but semantic tension detected
     FAIL = "fail"
     INCONCLUSIVE = "inconclusive"
 
