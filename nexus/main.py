@@ -15,7 +15,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from nexus import __version__
-from nexus.api import defense, federation, payments, policy, protocol, registry, router, schemas, trust, websocket
+from nexus.api import a2a, analytics, defense, federation, payments, policy, protocol, registry, router, schemas, trust, websocket
 from nexus.config import STATIC_DIR
 from nexus.database import close_db, get_db
 
@@ -89,6 +89,8 @@ app.include_router(payments.router)
 app.include_router(schemas.router)
 app.include_router(defense.router)
 app.include_router(policy.router)
+app.include_router(a2a.router)
+app.include_router(analytics.router)
 
 # Dashboard static files
 STATIC_DIR.mkdir(parents=True, exist_ok=True)
@@ -112,7 +114,13 @@ async def root():
 @app.get("/health")
 async def health():
     """Health check endpoint."""
-    return {"status": "ok", "version": __version__}
+    from nexus.router.circuit_breaker import get_all_breakers
+
+    breakers = get_all_breakers()
+    circuit_summary = {
+        aid: cb.to_dict() for aid, cb in breakers.items()
+    }
+    return {"status": "ok", "version": __version__, "circuit_breakers": circuit_summary}
 
 
 @app.get("/api/stats")

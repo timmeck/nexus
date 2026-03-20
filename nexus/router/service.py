@@ -8,6 +8,7 @@ import time
 from nexus.models.agent import Agent  # noqa: TC001
 from nexus.models.protocol import NexusRequest  # noqa: TC001
 from nexus.registry import service as registry
+from nexus.router.circuit_breaker import get_breaker
 
 log = logging.getLogger("nexus.router")
 
@@ -39,6 +40,8 @@ def record_agent_success(agent_id: str, latency_ms: float) -> None:
     n = h["_latency_samples"]
     h["avg_latency_ms"] = (h["avg_latency_ms"] * n + latency_ms) / (n + 1)
     h["_latency_samples"] = n + 1
+    # Update circuit breaker
+    get_breaker(agent_id).record_success()
 
 
 def record_agent_failure(agent_id: str) -> None:
@@ -46,6 +49,8 @@ def record_agent_failure(agent_id: str) -> None:
     h = _get_health(agent_id)
     h["last_failure"] = time.time()
     h["consecutive_failures"] += 1
+    # Update circuit breaker
+    get_breaker(agent_id).record_failure()
 
 
 def get_health_factor(agent_id: str) -> float:
@@ -62,15 +67,24 @@ def get_health_factor(agent_id: str) -> float:
 
 
 def get_agent_health(agent_id: str | None = None) -> dict:
-    """Return health data for one or all agents."""
+    """Return health data for one or all agents, including circuit breaker state."""
     if agent_id:
-        return _get_health(agent_id)
-    return dict(_agent_health)
+        health = dict(_get_health(agent_id))
+        health["circuit_breaker"] = get_breaker(agent_id).to_dict()
+        return health
+    result = {}
+    for aid, h in _agent_health.items():
+        entry = dict(h)
+        entry["circuit_breaker"] = get_breaker(aid).to_dict()
+        result[aid] = entry
+    return result
 
 
 def reset_agent_health() -> None:
     """Clear all health tracking data (useful for tests)."""
     _agent_health.clear()
+    from nexus.router.circuit_breaker import reset_all as reset_breakers
+    reset_breakers()
 
 
 class RouteResult:
@@ -136,6 +150,11 @@ async def route(
         candidates = [c for c in candidates if c.id in allowed_set]
         if not candidates:
             return []
+
+    # Filter out agents with open circuit breakers
+    candidates = [c for c in candidates if get_breaker(c.id).allow_request()]
+    if not candidates:
+        return []
 
     # Score and rank candidates
     scored = [_score_agent(agent, request, strategy) for agent in candidates]
