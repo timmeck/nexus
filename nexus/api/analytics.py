@@ -40,14 +40,16 @@ async def request_analytics(
     for r in await rows.fetchall():
         total = r["total"]
         successful = r["successful"]
-        periods.append({
-            "period": r["period"],
-            "total": total,
-            "successful": successful,
-            "failed": total - successful,
-            "success_rate": round(successful / total, 4) if total > 0 else 0,
-            "avg_latency_ms": round(r["avg_latency_ms"], 1) if r["avg_latency_ms"] else 0,
-        })
+        periods.append(
+            {
+                "period": r["period"],
+                "total": total,
+                "successful": successful,
+                "failed": total - successful,
+                "success_rate": round(successful / total, 4) if total > 0 else 0,
+                "avg_latency_ms": round(r["avg_latency_ms"], 1) if r["avg_latency_ms"] else 0,
+            }
+        )
 
     # Overall stats
     totals_row = await db.execute(
@@ -110,23 +112,22 @@ async def agent_analytics():
                LIMIT 10""",
             (r["agent_id"],),
         )
-        trust_history = [
-            {"trust": tr["trust_after"], "at": tr["created_at"]}
-            for tr in await trust_rows.fetchall()
-        ]
+        trust_history = [{"trust": tr["trust_after"], "at": tr["created_at"]} for tr in await trust_rows.fetchall()]
 
-        agents.append({
-            "agent_id": r["agent_id"],
-            "agent_name": r["agent_name"],
-            "total_requests": total,
-            "successful": successful,
-            "failed": failed,
-            "error_rate": round(failed / total, 4) if total > 0 else 0,
-            "avg_latency_ms": round(r["avg_latency_ms"], 1) if r["avg_latency_ms"] else 0,
-            "total_cost": round(r["total_cost"], 4) if r["total_cost"] else 0,
-            "current_trust": r["current_trust"],
-            "trust_trend": trust_history,
-        })
+        agents.append(
+            {
+                "agent_id": r["agent_id"],
+                "agent_name": r["agent_name"],
+                "total_requests": total,
+                "successful": successful,
+                "failed": failed,
+                "error_rate": round(failed / total, 4) if total > 0 else 0,
+                "avg_latency_ms": round(r["avg_latency_ms"], 1) if r["avg_latency_ms"] else 0,
+                "total_cost": round(r["total_cost"], 4) if r["total_cost"] else 0,
+                "current_trust": r["current_trust"],
+                "trust_trend": trust_history,
+            }
+        )
 
     return {"agents": agents, "count": len(agents)}
 
@@ -153,13 +154,15 @@ async def cost_analytics():
 
     by_agent = []
     for r in await agent_rows.fetchall():
-        by_agent.append({
-            "agent_id": r["agent_id"],
-            "agent_name": r["agent_name"],
-            "total_cost": round(r["total_cost"], 4),
-            "total_requests": r["total_requests"],
-            "avg_cost_per_request": round(r["avg_cost_per_request"], 4),
-        })
+        by_agent.append(
+            {
+                "agent_id": r["agent_id"],
+                "agent_name": r["agent_name"],
+                "total_cost": round(r["total_cost"], 4),
+                "total_requests": r["total_requests"],
+                "avg_cost_per_request": round(r["avg_cost_per_request"], 4),
+            }
+        )
 
     # Total cost
     total_row = await db.execute(

@@ -84,6 +84,7 @@ def reset_agent_health() -> None:
     """Clear all health tracking data (useful for tests)."""
     _agent_health.clear()
     from nexus.router.circuit_breaker import reset_all as reset_breakers
+
     reset_breakers()
 
 

@@ -23,10 +23,12 @@ async def test_gateway_agent_card_empty(client):
 @pytest.mark.asyncio
 async def test_gateway_agent_card_dynamic_capabilities(client, sample_agent_payload):
     """Gateway card capabilities are populated from registered agents."""
-    payload = sample_agent_payload(capabilities=[
-        {"name": "text_generation", "price_per_request": 0.01},
-        {"name": "code_analysis", "price_per_request": 0.05},
-    ])
+    payload = sample_agent_payload(
+        capabilities=[
+            {"name": "text_generation", "price_per_request": 0.01},
+            {"name": "code_analysis", "price_per_request": 0.05},
+        ]
+    )
     await create_agent(client, payload)
 
     resp = await client.get("/.well-known/agent.json")
@@ -40,9 +42,11 @@ async def test_gateway_agent_card_dynamic_capabilities(client, sample_agent_payl
 @pytest.mark.asyncio
 async def test_per_agent_card(client, sample_agent_payload):
     """Per-agent card returns correct agent details."""
-    payload = sample_agent_payload(capabilities=[
-        {"name": "summarization", "price_per_request": 0.02},
-    ])
+    payload = sample_agent_payload(
+        capabilities=[
+            {"name": "summarization", "price_per_request": 0.02},
+        ]
+    )
     agent = await create_agent(client, payload)
     agent_id = agent["id"]
 

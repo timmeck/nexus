@@ -130,9 +130,7 @@ async def health():
     from nexus.router.circuit_breaker import get_all_breakers
 
     breakers = get_all_breakers()
-    circuit_summary = {
-        aid: cb.to_dict() for aid, cb in breakers.items()
-    }
+    circuit_summary = {aid: cb.to_dict() for aid, cb in breakers.items()}
     return {"status": "ok", "version": __version__, "circuit_breakers": circuit_summary}
 
 
