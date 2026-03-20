@@ -3,9 +3,8 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
 
-from nexus.models.protocol import NexusRequest, NexusResponse
+from nexus.models.protocol import NexusRequest
 from nexus.models.verification import VerificationRequest, VerificationResult
 from nexus.protocol import handler
 from nexus.verification import service as verification

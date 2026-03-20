@@ -59,11 +59,7 @@ class CircuitBreaker:
                 log.info("Circuit for agent %s: OPEN -> HALF_OPEN (testing)", self.agent_id)
                 return True
             return False
-        if self.state == CircuitState.HALF_OPEN:
-            # Only one test request allowed in HALF_OPEN; subsequent
-            # requests are blocked until the test request completes
-            return True
-        return False
+        return self.state == CircuitState.HALF_OPEN
 
     def record_success(self) -> None:
         """Record a successful request."""

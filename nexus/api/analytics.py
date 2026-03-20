@@ -23,10 +23,7 @@ async def request_analytics(
     """
     db = await get_db()
 
-    if period == "hour":
-        group_expr = "substr(created_at, 1, 13)"  # YYYY-MM-DDTHH
-    else:
-        group_expr = "substr(created_at, 1, 10)"  # YYYY-MM-DD
+    group_expr = "substr(created_at, 1, 13)" if period == "hour" else "substr(created_at, 1, 10)"
 
     # Request volume per period from interactions
     rows = await db.execute(

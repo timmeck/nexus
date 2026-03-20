@@ -15,7 +15,20 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from nexus import __version__
-from nexus.api import a2a, analytics, defense, federation, payments, policy, protocol, registry, router, schemas, trust, websocket
+from nexus.api import (
+    a2a,
+    analytics,
+    defense,
+    federation,
+    payments,
+    policy,
+    protocol,
+    registry,
+    router,
+    schemas,
+    trust,
+    websocket,
+)
 from nexus.config import STATIC_DIR
 from nexus.database import close_db, get_db
 

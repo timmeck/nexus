@@ -136,7 +136,7 @@ async def test_health_endpoint_includes_circuit_state(client):
 @pytest.mark.asyncio
 async def test_router_health_includes_circuit_state(client):
     """The /api/router/health endpoint includes circuit breaker state."""
-    from nexus.router.service import record_agent_failure, record_agent_success
+    from nexus.router.service import record_agent_success
 
     record_agent_success("test-agent", 100)
     resp = await client.get("/api/router/health?agent_id=test-agent")
