@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
 
 from nexus.models.protocol import NexusRequest, NexusResponse
 from nexus.models.verification import VerificationRequest, VerificationResult
@@ -12,10 +13,32 @@ from nexus.verification import service as verification
 router = APIRouter(prefix="/api/protocol", tags=["protocol"])
 
 
-@router.post("/request", response_model=NexusResponse)
-async def submit_request(request: NexusRequest):
-    """Submit a NexusRequest — routes to best agent and returns response."""
+class AsyncNexusRequest(NexusRequest):
+    """NexusRequest with optional async flag."""
+
+    async_mode: bool = False
+
+
+@router.post("/request")
+async def submit_request(request: AsyncNexusRequest):
+    """Submit a NexusRequest — routes to best agent and returns response.
+
+    If async_mode is true, returns a task_id immediately for polling.
+    """
+    if request.async_mode:
+        # Convert back to base NexusRequest for the handler
+        base_request = NexusRequest(**request.model_dump(exclude={"async_mode"}))
+        return await handler.handle_request_async(base_request)
     return await handler.handle_request(request)
+
+
+@router.get("/tasks/{task_id}")
+async def get_task_status(task_id: str):
+    """Poll for the result of an async task."""
+    result = handler.get_async_task_status(task_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail=f"Task {task_id} not found")
+    return result
 
 
 @router.post("/verify", response_model=VerificationResult)

@@ -22,3 +22,9 @@ async def route_request(
         "strategy": strategy,
         "candidates": [r.to_dict() for r in results],
     }
+
+
+@router.get("/health")
+async def agent_health(agent_id: str | None = None):
+    """Get health metrics for agents used in routing decisions."""
+    return {"health": service.get_agent_health(agent_id)}

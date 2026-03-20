@@ -8,6 +8,7 @@ If it is not enforced in the request lifecycle, it is not part of the protocol.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import time
@@ -17,6 +18,7 @@ from datetime import UTC, datetime
 import httpx
 
 from nexus.auth import sign_request
+from nexus.config import DEFAULT_TIMEOUT, timeout_overrides
 from nexus.defense import service as defense
 from nexus.models.agent import AgentStatus, AgentUpdate
 from nexus.models.protocol import NexusRequest, NexusResponse, ResponseStatus
@@ -31,6 +33,9 @@ log = logging.getLogger("nexus.protocol")
 
 # Active request tracking
 _active_requests: dict[str, dict] = {}
+
+# Async task queue for long-running requests
+_async_tasks: dict[str, dict] = {}
 
 
 async def handle_request(request: NexusRequest) -> NexusResponse:
@@ -150,6 +155,12 @@ async def handle_request(request: NexusRequest) -> NexusResponse:
         response.processing_ms = elapsed_ms
         success = response.status == ResponseStatus.COMPLETED
 
+        # Update agent health based on outcome
+        if success:
+            router.record_agent_success(best.agent.id, elapsed_ms)
+        else:
+            router.record_agent_failure(best.agent.id)
+
         if not success:
             lifecycle.transition(RequestState.FAILED)
             trail_step(trail, "provider_failed")
@@ -223,6 +234,40 @@ async def handle_request(request: NexusRequest) -> NexusResponse:
         )
 
 
+async def handle_request_async(request: NexusRequest) -> dict:
+    """Submit a request for async background processing.
+
+    Returns a task_id immediately. The caller can poll for results via
+    get_async_task_status(task_id).
+    """
+    task_id = uuid.uuid4().hex[:16]
+    _async_tasks[task_id] = {
+        "task_id": task_id,
+        "request_id": request.request_id,
+        "status": "pending",
+        "result": None,
+        "created_at": time.time(),
+    }
+
+    async def _run() -> None:
+        try:
+            _async_tasks[task_id]["status"] = "running"
+            response = await handle_request(request)
+            _async_tasks[task_id]["status"] = "completed"
+            _async_tasks[task_id]["result"] = response.model_dump(mode="json")
+        except Exception as e:
+            _async_tasks[task_id]["status"] = "failed"
+            _async_tasks[task_id]["result"] = {"error": str(e)}
+
+    asyncio.create_task(_run())  # noqa: RUF006
+    return {"task_id": task_id, "status": "pending"}
+
+
+def get_async_task_status(task_id: str) -> dict | None:
+    """Return current status of an async task, or None if not found."""
+    return _async_tasks.get(task_id)
+
+
 async def _audit_completion(
     request: NexusRequest,
     trail: dict,
@@ -251,9 +296,17 @@ async def _audit_completion(
         log.warning("Audit write failed: %s", e)
 
 
+def _get_timeout_for_capability(capability: str | None) -> float:
+    """Return the timeout for a given capability, with per-capability overrides."""
+    if capability and capability.lower() in timeout_overrides:
+        return timeout_overrides[capability.lower()]
+    return DEFAULT_TIMEOUT
+
+
 async def _forward_to_agent(request: NexusRequest, agent) -> NexusResponse:
     """Forward a request to an agent's endpoint with HMAC signing."""
     url = f"{agent.endpoint.rstrip('/')}/nexus/handle"
+    timeout = _get_timeout_for_capability(request.capability)
 
     try:
         payload_json = request.model_dump_json()
@@ -265,7 +318,7 @@ async def _forward_to_agent(request: NexusRequest, agent) -> NexusResponse:
             headers.update(auth_headers)
             log.debug("Signed request for agent %s", agent.name)
 
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        async with httpx.AsyncClient(timeout=timeout) as client:
             resp = await client.post(
                 url,
                 content=payload_json,

@@ -23,3 +23,14 @@ HEARTBEAT_TIMEOUT = 60
 
 # Router defaults
 DEFAULT_STRATEGY = "best"  # best | cheapest | fastest
+
+# Default request timeout (seconds)
+DEFAULT_TIMEOUT = 30.0
+
+# Per-capability timeout overrides (seconds)
+# Capabilities not listed here use DEFAULT_TIMEOUT
+timeout_overrides: dict[str, float] = {
+    "deep_research": 120.0,
+    "code_generation": 90.0,
+    "embedding": 60.0,
+}

@@ -3,12 +3,74 @@
 from __future__ import annotations
 
 import logging
+import time
 
 from nexus.models.agent import Agent  # noqa: TC001
 from nexus.models.protocol import NexusRequest  # noqa: TC001
 from nexus.registry import service as registry
 
 log = logging.getLogger("nexus.router")
+
+# ── Agent Health Tracking ────────────────────────────────────────
+# Tracks per-agent health metrics for routing decisions.
+
+_agent_health: dict[str, dict] = {}
+
+
+def _get_health(agent_id: str) -> dict:
+    """Return or initialise health record for an agent."""
+    if agent_id not in _agent_health:
+        _agent_health[agent_id] = {
+            "last_success": None,
+            "last_failure": None,
+            "consecutive_failures": 0,
+            "avg_latency_ms": 0.0,
+            "_latency_samples": 0,
+        }
+    return _agent_health[agent_id]
+
+
+def record_agent_success(agent_id: str, latency_ms: float) -> None:
+    """Record a successful response from an agent."""
+    h = _get_health(agent_id)
+    h["last_success"] = time.time()
+    h["consecutive_failures"] = 0
+    # Running average of latency
+    n = h["_latency_samples"]
+    h["avg_latency_ms"] = (h["avg_latency_ms"] * n + latency_ms) / (n + 1)
+    h["_latency_samples"] = n + 1
+
+
+def record_agent_failure(agent_id: str) -> None:
+    """Record a failed response from an agent."""
+    h = _get_health(agent_id)
+    h["last_failure"] = time.time()
+    h["consecutive_failures"] += 1
+
+
+def get_health_factor(agent_id: str) -> float:
+    """Compute a 0.0-1.0 health factor for routing score adjustment.
+
+    - 1.0 for healthy agents (no recent failures)
+    - Drops by 0.25 per consecutive failure, min 0.1
+    """
+    h = _get_health(agent_id)
+    failures = h["consecutive_failures"]
+    if failures == 0:
+        return 1.0
+    return max(0.1, 1.0 - failures * 0.25)
+
+
+def get_agent_health(agent_id: str | None = None) -> dict:
+    """Return health data for one or all agents."""
+    if agent_id:
+        return _get_health(agent_id)
+    return dict(_agent_health)
+
+
+def reset_agent_health() -> None:
+    """Clear all health tracking data (useful for tests)."""
+    _agent_health.clear()
 
 
 class RouteResult:
@@ -96,7 +158,11 @@ async def route(
 
 
 def _score_agent(agent: Agent, request: NexusRequest, strategy: str) -> RouteResult:
-    """Score an agent for a given request and strategy."""
+    """Score an agent for a given request and strategy.
+
+    The raw score is multiplied by a health_factor (0.1-1.0) that penalises
+    agents with recent consecutive failures.
+    """
     cap = _find_capability(agent, request.capability)
 
     trust = agent.trust_score
@@ -116,6 +182,12 @@ def _score_agent(agent: Agent, request: NexusRequest, strategy: str) -> RouteRes
     else:  # "best" — balanced
         score = trust * 0.4 + speed * 0.3 + price * 0.2 + cap_match * 0.1
         reason = f"best: trust={trust:.2f} speed={speed:.2f} price={price:.2f}"
+
+    # Apply health factor
+    health_factor = get_health_factor(agent.id)
+    score *= health_factor
+    if health_factor < 1.0:
+        reason += f" health={health_factor:.2f}"
 
     return RouteResult(agent, score, reason)
 
