@@ -1,8 +1,10 @@
 # Roadmap
 
-Nexus's Phase 1 (enforcement, verification, defense) is complete: 224 tests, 12/12 adversarial patterns caught, 4/4 meta-agent attacks caught, 9 enforced layers in the request path.
+Nexus's Phase 1 (enforcement, verification, defense) is complete: 224 tests, 12/12 adversarial patterns caught, 4/4 meta-agent attacks caught.
 
-This document tracks what is **not yet built** so external readers can see what is fact vs. plan.
+The agent-protocol landscape in 2026 changed how Nexus is positioned. **Google A2A is the de-facto transport** (Linux Foundation, 150+ orgs, 5 production SDKs, Signed Agent Cards). Microsoft IATP is the de-facto identity-and-reputation layer. PayCrow / ERC-8004 / Nava cover escrow. None of them verify **whether the agent's answer is factually correct**. That is Nexus's lane.
+
+Phase 2 reorients Nexus from "standalone protocol" to **verification middleware** — a verdict service that runs over A2A, IATP, or standalone.
 
 ## Status Legend
 
@@ -10,60 +12,62 @@ This document tracks what is **not yet built** so external readers can see what 
 - **Planned** — committed direction, no code yet
 - **Considered** — credible idea, not committed
 
-## Phase 1 — Core Protocol (Done)
+## Phase 1 — Verification Engine (Done)
 
-- 9 enforced layers: Discovery, Trust, Protocol, Routing, Federation, Payments, Schemas, Defense, Policy
-- Claim-level verification with SUSPICIOUS verdict for semantic tension
+- Claim-level extraction with SUSPICIOUS verdict for semantic tension
+- 12/12 adversarial patterns caught (partial cheater, style mimic, omission, collusion, meaning swap, negation, context shift, others)
+- 4/4 meta-agent attacks caught (adversaries that know the verifier)
+- 0/4 false positives on stylistically diverse honest agents
 - HMAC + timestamp + signature-cache replay protection (3 layers)
 - Compare-and-swap pattern enforced via CI guards
 - Reconciliation job for stuck requests and orphaned escrows
-- 198 → 224 tests (chaos, crash injection, cross-object consistency, claim extraction)
-- 8 reference agents on the standalone SDK
+- 224 tests
 - See `README.md` and `docs/invariants.md` for the full surface
 
-## Phase 2 — Distribution & Trust Completeness (Planned)
+## Phase 2 — A2A Integration + Verification Reach (Planned)
 
-These are the items that, if closed, move Nexus from "impressive demo" to "thing the industry can adopt."
+The unblocking question is: how does an existing A2A network start using Nexus verdicts?
 
-### Trust completeness
+### A2A bridge (top priority)
 
-- **External truth anchoring** — closes the only architectural gap left after the red team. Consensus-based verification is structurally blind to shared hallucination (all agents wrong in the same way). Adding an oracle/citation pass for high-stakes requests would close this. Today this is documented in `README.md` under "Known Detection Boundaries" — Phase 2 makes it concrete.
-- **Verifier diversity** — current verifiers are claim-extraction variants. Add a structural/logical verifier and an LLM-judge verifier so disagreement among verifier classes becomes a signal.
-- **Trust score decay + recovery curve** — reputation should age, and slashed agents need a rehabilitation path. Without one, the network only ever loses participants.
+- **A2A Agent Card consumer** — Nexus's Discovery layer accepts A2A Agent Cards as input. Agents already registered in A2A become available to Nexus verifiers without re-registration.
+- **A2A JSON-RPC adapter** — Nexus exposes `/api/protocol/verify` as a JSON-RPC 2.0 endpoint that an A2A client can call directly. Returns Nexus verdict (PASS / FAIL / SUSPICIOUS) plus claim-level diff.
+- **A2A verdict callback** — Nexus emits verdicts back into A2A's response flow so they can be consumed by A2A-native escrow (PayCrow, ERC-8004, Nava). Verdict drives release-or-dispute decision.
+- **Reference: A2A + Nexus example** — one end-to-end working flow: agent registered on A2A, query routed via A2A, response verified by Nexus, escrow released or slashed based on the verdict.
+
+### Verification reach
+
+- **External truth anchoring** — closes the only architectural gap left from the red team. Consensus-based verification is structurally blind to shared hallucination (all agents wrong identically). Adding an oracle / citation pass for high-stakes requests would close this.
+- **Verifier diversity** — current verifiers are claim-extraction variants. Add a structural / logical verifier and an LLM-judge verifier so disagreement *among verifier classes* becomes a signal.
+- **Trust score decay + recovery curve** — reputation should age, and slashed agents need a rehabilitation path. Otherwise the network only loses participants.
 
 ### Distribution
 
-- **JS / TS SDK** — Python-only adapter locks out the largest agent ecosystem (LangChain, CrewAI, Vercel AI SDK). Highest single-step adoption lever.
-- **Public testnet** — a hosted Nexus instance anyone can register against with one curl command. Without it, "federated" is a claim, not a demo.
-- **Formal protocol spec (versioned)** — RFC-style document plus conformance test suite, so third parties can build compatible servers and clients.
-- **Reference third-party agent** — at least one agent on the network shipped by someone other than the maintainer.
+- **JS / TS SDK** — Python-only adapter locks out LangChain, CrewAI, Vercel AI SDK. The A2A bridge reduces the urgency (A2A already has 5 SDKs), but a thin JS verdict-client is still useful for native Nexus mode.
+- **Verdict-as-a-service reference deployment** — a public Nexus that exposes the verifier as a callable service. Anyone with an A2A agent can submit a verification request without running Nexus themselves.
 
 ## Phase 3 — Production Operations (Considered, Not Yet Committed)
 
-These are listed so the gap is honest, not because they are queued. Production-grade hardening before there are real users is premature optimization.
+Listed for honesty, not queued. Production hardening before there are real users is premature.
 
 - PostgreSQL migration path (SQLite is fine for single-node)
 - OpenTelemetry traces, Prometheus metrics, SLO dashboards
-- OAuth / mTLS / key rotation beyond HMAC
+- OAuth / mTLS / key rotation beyond HMAC (less urgent with A2A's Signed Agent Cards in front)
 - Rate limiting and quotas at the registry edge
 - Docker + Helm chart, documented backup/restore
-- Real money rails (Stripe / Lightning) instead of credit-only wallets
-- gRPC or GraphQL transport alongside REST + WebSocket
-- Provider → Nexus → Sub-provider delegation chains
-- SLA enforcement with automatic slashing for breaches
-- Compliance claim verification (today policy accepts claims as strings)
+- gRPC transport alongside REST + WebSocket
 - Agent versioning (capability hashes, semver)
 
 ## Out of Scope
 
-The following are intentionally **not** on the roadmap:
-
-- A blockchain. Nexus uses an append-only audit trail and credit ledger because that is what the invariants require — adding consensus layers would be cargo culting.
-- A hosted SaaS managed by us. The point is self-hostable + federated.
-- A general-purpose agent framework. Nexus is the protocol between agents, not a replacement for LangChain / CrewAI / AutoGen.
+- **Competing with A2A on transport.** A2A won. Nexus runs over it.
+- **A blockchain.** Nexus uses an append-only ledger because that's what the invariants require — adding consensus layers would be cargo culting.
+- **A hosted SaaS managed by us.** The point is self-hostable, open-source, no vendor lock-in.
+- **A general-purpose agent framework.** Nexus is a verdict, not a framework.
+- **Identity / reputation / escrow** as primary products. Those are solved by A2A / IATP / PayCrow / Nava. Nexus delegates to them.
 
 ## How to Influence the Roadmap
 
-- Open an issue describing the gap you hit and the use case behind it
-- For trust / verification gaps specifically: open a PR with a failing adversarial test case under `tests/test_red_team.py` — that is the fastest path to a fix
-- For SDK contributions, see `CONTRIBUTING.md` for the open vs. core boundary
+- Open an issue describing where you'd plug Nexus into an existing A2A or agent network — concrete integration friction is the most useful input
+- Adversarial test cases — if you can craft an agent pattern that escapes verification, that is the most valuable contribution. PR with a failing test under `tests/test_red_team.py`
+- A2A bridge work — pick any of the four sub-items in Phase 2 and open a PR

@@ -1,6 +1,6 @@
 # Nexus
 
-**The AI-to-AI Protocol Layer that catches unreliable agent outputs before they cost you money.**
+**The verification layer for AI agent networks. A2A and IATP prove agents are who they say they are. Nexus checks if they're telling the truth.**
 
 [![CI](https://github.com/timmeck/nexus/actions/workflows/ci.yml/badge.svg)](https://github.com/timmeck/nexus/actions/workflows/ci.yml)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/downloads/)
@@ -10,9 +10,30 @@
 
 ## The Problem
 
-When Agent A asks Agent B for work, there's no guarantee the result is correct. Agent B can return garbage with 95% confidence, and Agent A pays anyway. No verification, no recourse, no accountability.
+Today's agent protocols verify the *sender* and the *delivery*. None of them verify the *answer*.
 
-**Nexus adds enforcement.** Agent outputs are verified. Payments are held in escrow. Bad actors get slashed. Every step is audited.
+- **A2A Signed Agent Cards** prove the agent is who it claims to be.
+- **IATP** scores reputation based on past behavior.
+- **PayCrow / ERC-8004** release escrow when bytes arrive matching a JSON schema.
+- **Nava** verifies intent against the user's request.
+
+But Agent B can return a cryptographically-signed, schema-valid, on-time response that is **factually wrong** — and every layer above passes it through. Partial cheaters, style mimics, semantic swaps, coordinated collusion: all defeat identity-based trust because they aren't lying about who they are. They're lying about *what they know*.
+
+**Nexus is the missing verdict.** Claim-level semantic verification that runs over A2A, IATP, or standalone. Verified outputs settle escrow. Failed verifications slash trust. Every step is audited.
+
+## Why Not Just A2A?
+
+A2A is the right transport. Nexus is the verdict on top.
+
+| Layer | A2A / IATP | PayCrow / ERC-8004 / Nava | **Nexus** |
+|---|---|---|---|
+| Sender authenticity | ✅ Signed Agent Cards | — | (delegated to A2A) |
+| Identity reputation | ✅ Trust score 0-1000 | — | (delegated to IATP) |
+| Delivery / schema match | — | ✅ Smart-contract escrow | (delegated) |
+| **Content correctness** | ❌ | ❌ | ✅ **Claim-level verification** |
+| Adversarial test coverage | Identity attacks | Replay / non-delivery | **12/12 caught: partial cheat, style mimic, omission, collusion, meaning swap, negation, context shift** |
+
+Use A2A for *who* and *whether*. Use Nexus for *what*.
 
 ## 60-Second Demo
 
@@ -150,19 +171,30 @@ This catches the attacks that naive string matching misses: partial cheaters (80
 
 ## Architecture
 
-9 layers, each in the enforced request path:
+Nexus has 9 layers. The differentiated value lives in **Verification + Defense + Trust** — these are what no other agent network does today. The rest exist so Nexus can also run standalone, but are best understood as substrate that A2A can replace.
+
+**Differentiating layers (the product):**
 
 | Layer | Purpose |
 |---|---|
-| Discovery | Agent registry, capability search, heartbeat monitoring |
-| Trust | Reputation scoring, interaction tracking |
-| Protocol | NexusRequest/NexusResponse lifecycle |
-| Routing | Best, cheapest, fastest, or most trusted agent matching |
-| Federation | Cross-instance agent registry sync |
-| Payments | Credit wallets, pay-per-request |
-| Schemas | Formal capability definitions |
+| **Verification** | Claim-level extraction, normalization, semantic-tension detection, SUSPICIOUS verdict |
+| **Defense** | Slashing, escrow disputes, challenges, sybil detection — driven by verification verdicts |
+| **Trust** | Append-only reputation ledger fed by verification outcomes |
+
+**Substrate layers (replaceable by A2A or similar):**
+
+| Layer | Purpose | Can be replaced by |
+|---|---|---|
+| Discovery | Agent registry, capability search, heartbeat monitoring | A2A Agent Cards |
+| Protocol | NexusRequest/NexusResponse lifecycle | A2A JSON-RPC 2.0 |
+| Routing | Best, cheapest, fastest, or most trusted agent matching | A2A discovery + routing |
+| Federation | Cross-instance agent registry sync | A2A federation |
+| Payments | Credit wallets, pay-per-request | x402 / PayCrow / on-chain escrow |
+| Schemas | Formal capability definitions | A2A Agent Cards |
 | Defense | Slashing, escrow, challenges, sybil detection |
-| Policy | Data locality, compliance claims, routing policies |
+| Policy | Data locality, compliance claims, routing policies | — (keep, used by both modes) |
+
+**Roadmap:** an A2A bridge is the top Phase 2 item — Nexus consumes A2A Agent Cards as discovery, accepts A2A JSON-RPC requests, and emits Nexus verdicts back into A2A's response flow. See `ROADMAP.md`.
 
 ## Known Detection Boundaries
 
